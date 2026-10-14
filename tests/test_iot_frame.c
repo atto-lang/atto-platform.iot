@@ -1,4 +1,7 @@
 #include "ores_iot_frame.h"
+#ifdef NDEBUG
+#undef NDEBUG /* Release builds must execute test assertions */
+#endif
 #include <assert.h>
 #include <stdint.h>
 #include <string.h>
@@ -39,5 +42,14 @@ int main(void) {
     assert(parsed.kind == ORES_IOT_ACK && parsed.length == 0);
     assert(ores_iot_encode(ORES_IOT_COMMAND, data, ORES_IOT_MAX_PAYLOAD_BYTES + 1u,
                            frame, sizeof frame, &written) == ORES_IOT_TOO_LARGE);
+    /* Encoding must handle a payload sharing storage with the destination. */
+    {
+        uint8_t overlap[16] = {0x10u, 0x20u, 0x30u};
+        assert(ores_iot_encode(ORES_IOT_TELEMETRY, overlap, 3,
+                               overlap, sizeof overlap, &written) == ORES_IOT_OK);
+        assert(ores_iot_decode(overlap, written, &parsed) == ORES_IOT_OK);
+        assert(parsed.length == 3 && parsed.payload[0] == 0x10 &&
+               parsed.payload[1] == 0x20 && parsed.payload[2] == 0x30);
+    }
     return 0;
 }

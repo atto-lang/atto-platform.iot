@@ -15,3 +15,7 @@ Untrusted network peers, spoofed devices, replayed commands, stale/rolled-back f
 - Fuzzing of protocol parsers and end-to-end integration tests under fault injection.
 
 The v1 frame codec does **none** of the crypto/authenticity/authorization tasks. It must not be exposed as a privileged Internet protocol without external protections. Keep transport implementation and key management in dedicated, reviewed modules.
+
+## Failure containment
+
+The stream parser now rejects calls exceeding a 4096-byte feed budget, fails closed after malformed input and callback errors, and requires explicit reinitialization. These are input-processing constraints, **not** transport authentication or replay protection.

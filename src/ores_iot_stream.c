@@ -21,6 +21,7 @@ ores_iot_status ores_iot_stream_init(ores_iot_stream *stream) {
     stream->used = 0;
     stream->expected = 0;
     stream->busy = 0;
+    stream->failed = 0;
     return ORES_IOT_OK;
 }
 
@@ -34,6 +35,8 @@ ores_iot_status ores_iot_stream_feed(
     if (stream == NULL || handler == NULL || (chunk_len != 0 && chunk == NULL))
         return ORES_IOT_INVALID_ARGUMENT;
     if (stream->busy) return ORES_IOT_INVALID_ARGUMENT;
+    if (stream->failed) return ORES_IOT_CLOSED;
+    if (chunk_len > ORES_IOT_MAX_FEED_BYTES) return ORES_IOT_TOO_LARGE;
     stream->busy = 1;
     for (i = 0; i < chunk_len; ++i) {
         ores_iot_view view;
@@ -60,6 +63,7 @@ ores_iot_status ores_iot_stream_feed(
         /* Reset to prevent accepting tail of a malformed frame as a header. */
         stream->used = 0;
         stream->expected = 0;
+        stream->failed = 1;
     }
     stream->busy = 0;
     return status;
