@@ -10,3 +10,7 @@
 - This is not a secure transport: TLS/identity/authorization/replay resistance are required externally.
 
 Fuzz harnesses under `fuzz/` can be built manually using LLVM libFuzzer; the bootstrap CI does not claim fuzz coverage.
+
+## Fail-closed hardening
+
+After a malformed frame or callback error, the parser is poisoned (`failed=1`) and returns `ORES_IOT_CLOSED` on subsequent feeds until explicitly reinitialized. In network code, close/quarantine the session rather than reinitialize to keep reading untrusted bytes. Single calls have a 4096-byte processing budget to bound callback work. `init` must not be called during a feed or from inside a callback; the caller owns stream lifetime and serialization.

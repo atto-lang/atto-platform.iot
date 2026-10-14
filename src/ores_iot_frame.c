@@ -1,4 +1,5 @@
 #include "ores_iot_frame.h"
+#include <string.h>
 
 static int valid_kind(unsigned k) {
     return k == ORES_IOT_TELEMETRY || k == ORES_IOT_COMMAND || k == ORES_IOT_ACK;
@@ -7,7 +8,6 @@ static int valid_kind(unsigned k) {
 ores_iot_status ores_iot_encode(ores_iot_kind kind,
     const uint8_t *payload, size_t payload_len,
     uint8_t *destination, size_t capacity, size_t *written) {
-    size_t i;
     if (written == NULL) return ORES_IOT_INVALID_ARGUMENT;
     *written = 0;
     if (!valid_kind((unsigned)kind)) return ORES_IOT_UNSUPPORTED_KIND;
@@ -16,13 +16,14 @@ ores_iot_status ores_iot_encode(ores_iot_kind kind,
         return ORES_IOT_INVALID_ARGUMENT;
     if (capacity < ORES_IOT_HEADER_BYTES + payload_len)
         return ORES_IOT_BUFFER_TOO_SMALL;
+    /* Copy before writing the header: overlapping input/output is supported. */
+    if (payload_len != 0) memmove(destination + ORES_IOT_HEADER_BYTES, payload, payload_len);
     destination[0] = 'O'; destination[1] = 'R';
     destination[2] = 'E'; destination[3] = 'S';
     destination[4] = (uint8_t)ORES_IOT_FRAME_VERSION;
     destination[5] = (uint8_t)kind;
     destination[6] = (uint8_t)(payload_len >> 8);
     destination[7] = (uint8_t)(payload_len & 255u);
-    for (i = 0; i < payload_len; ++i) destination[ORES_IOT_HEADER_BYTES + i] = payload[i];
     *written = ORES_IOT_HEADER_BYTES + payload_len;
     return ORES_IOT_OK;
 }

@@ -1,4 +1,7 @@
 #include "ores_iot_stream.h"
+#ifdef NDEBUG
+#undef NDEBUG /* Release builds must execute test assertions */
+#endif
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -35,16 +38,26 @@ int main(void) {
     assert(ores_iot_stream_feed(&stream, pair, size * 2, callback, &s, &delivered) == ORES_IOT_OK);
     assert(delivered == 2 && s.count == 3);
     assert(ores_iot_stream_feed(&stream, frame, size, failure, NULL, &delivered) == ORES_IOT_INVALID_ARGUMENT);
-    assert(delivered == 0 && stream.used == 0);
+    assert(delivered == 0 && stream.used == 0 && stream.failed == 1);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_CLOSED);
+    assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
     frame[0] = 'X';
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_MALFORMED);
-    assert(delivered == 0 && stream.used == 0);
+    assert(delivered == 0 && stream.used == 0 && stream.failed == 1);
     frame[0] = 'O';
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_CLOSED);
+    assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_OK);
     assert(delivered == 1 && s.count == 4);
     assert(ores_iot_stream_feed(&stream, NULL, 1, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     assert(ores_iot_stream_feed(&stream, frame, size, NULL, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, NULL) == ORES_IOT_INVALID_ARGUMENT);
+    {
+        static uint8_t oversized[ORES_IOT_MAX_FEED_BYTES + 1u];
+        assert(ores_iot_stream_feed(&stream, oversized, sizeof oversized,
+                                   callback, &s, &delivered) == ORES_IOT_TOO_LARGE);
+        assert(delivered == 0 && stream.used == 0 && stream.failed == 0);
+    }
     stream.busy = 1;
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     return 0;
