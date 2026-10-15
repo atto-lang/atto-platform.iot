@@ -34,6 +34,11 @@ ores_iot_status ores_iot_stream_feed(
     ores_iot_stream *stream, const uint8_t *chunk, size_t chunk_len,
     ores_iot_frame_handler handler, void *ctx, size_t *delivered);
 
+/* End-of-input admission: OK only on a complete frame boundary. A partial
+ * header/payload returns MALFORMED. Either outcome closes until init.
+ * Never call during a callback or concurrently with feed/init. */
+ores_iot_status ores_iot_stream_finish(ores_iot_stream *stream);
+
 #ifdef __cplusplus
 }
 #endif

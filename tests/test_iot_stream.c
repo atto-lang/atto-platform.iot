@@ -60,5 +60,26 @@ int main(void) {
     }
     stream.busy = 1;
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_finish(&stream) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_finish(NULL) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+    assert(ores_iot_stream_finish(&stream) == ORES_IOT_OK);
+    assert(ores_iot_stream_finish(&stream) == ORES_IOT_CLOSED);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_CLOSED);
+    {
+        size_t prefix;
+        for (prefix = 1; prefix < size; ++prefix) {
+            assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+            assert(ores_iot_stream_feed(&stream, frame, prefix, callback, &s, &delivered) == ORES_IOT_OK);
+            assert(delivered == 0);
+            assert(ores_iot_stream_finish(&stream) == ORES_IOT_MALFORMED);
+            assert(stream.used == 0 && stream.expected == 0);
+            assert(ores_iot_stream_finish(&stream) == ORES_IOT_CLOSED);
+        }
+    }
+    assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_OK);
+    assert(delivered == 1);
+    assert(ores_iot_stream_finish(&stream) == ORES_IOT_OK);
     return 0;
 }

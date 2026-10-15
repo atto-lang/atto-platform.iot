@@ -22,3 +22,5 @@ ctest --test-dir build --output-on-failure
 ```
 
 See `docs/ARCHITECTURE.md` and `docs/SECURITY.md`.
+
+Call `ores_iot_stream_finish` at end of input to reject a truncated header or payload. It returns `ORES_IOT_OK` only at a frame boundary and closes the stream until reinitialized. This is framing validation; it does not authenticate a peer.
