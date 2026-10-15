@@ -68,3 +68,14 @@ ores_iot_status ores_iot_stream_feed(
     stream->busy = 0;
     return status;
 }
+
+ores_iot_status ores_iot_stream_finish(ores_iot_stream *stream) {
+    ores_iot_status status;
+    if (stream == NULL || stream->busy) return ORES_IOT_INVALID_ARGUMENT;
+    if (stream->failed) return ORES_IOT_CLOSED;
+    status = stream->used == 0 && stream->expected == 0 ? ORES_IOT_OK : ORES_IOT_MALFORMED;
+    stream->used = 0;
+    stream->expected = 0;
+    stream->failed = 1;
+    return status;
+}
