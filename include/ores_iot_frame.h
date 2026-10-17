@@ -35,12 +35,14 @@ typedef struct {
     size_t length;
 } ores_iot_view;
 
-/* Encode into caller-owned output. Input may overlap output; written must not alias either. */
+/* Encode into caller-owned output. Input may overlap output; written must not alias
+ * the payload or destination byte ranges. Aliasing is rejected before any write. */
 ores_iot_status ores_iot_encode(ores_iot_kind kind,
     const uint8_t *payload, size_t payload_len,
     uint8_t *destination, size_t capacity, size_t *written);
 
-/* Exact-length, fail-closed validation. View valid while input frame lives. */
+/* Exact-length, fail-closed validation. View valid while input frame lives.
+ * The output view object must not overlap the input frame bytes. */
 ores_iot_status ores_iot_decode(const uint8_t *frame,
     size_t frame_len, ores_iot_view *out);
 
