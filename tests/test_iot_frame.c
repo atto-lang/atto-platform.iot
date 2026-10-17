@@ -42,6 +42,25 @@ int main(void) {
     assert(parsed.kind == ORES_IOT_ACK && parsed.length == 0);
     assert(ores_iot_encode(ORES_IOT_COMMAND, data, ORES_IOT_MAX_PAYLOAD_BYTES + 1u,
                            frame, sizeof frame, &written) == ORES_IOT_TOO_LARGE);
+    /* Reject output metadata aliases before touching payload or destination bytes. */
+    {
+        union { size_t written; ores_iot_view view; uint8_t bytes[64]; } alias;
+        uint8_t before[sizeof alias.bytes];
+        memset(alias.bytes, 0x5a, sizeof alias.bytes);
+        memcpy(before, alias.bytes, sizeof before);
+        assert(ores_iot_encode(ORES_IOT_TELEMETRY, alias.bytes, 3,
+                               frame, sizeof frame, &alias.written) == ORES_IOT_INVALID_ARGUMENT);
+        assert(memcmp(before, alias.bytes, sizeof before) == 0);
+        assert(ores_iot_encode(ORES_IOT_TELEMETRY, data, 3,
+                               alias.bytes, sizeof alias.bytes, &alias.written) == ORES_IOT_INVALID_ARGUMENT);
+        assert(memcmp(before, alias.bytes, sizeof before) == 0);
+        assert(ores_iot_encode(ORES_IOT_TELEMETRY, data, 3,
+                               frame, sizeof frame, &written) == ORES_IOT_OK);
+        memcpy(alias.bytes, frame, written);
+        memcpy(before, alias.bytes, sizeof before);
+        assert(ores_iot_decode(alias.bytes, written, &alias.view) == ORES_IOT_INVALID_ARGUMENT);
+        assert(memcmp(before, alias.bytes, sizeof before) == 0);
+    }
     /* Encoding must handle a payload sharing storage with the destination. */
     {
         uint8_t overlap[16] = {0x10u, 0x20u, 0x30u};
