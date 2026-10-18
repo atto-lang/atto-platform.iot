@@ -31,6 +31,8 @@ ores_iot_status ores_iot_stream_init(ores_iot_stream *stream);
  * chunk and delivered must not alias stream storage; delivered must not alias chunk.
  * Callback-side stream reinitialization/state mutation is detected and poisons the stream.
  * 'delivered' counts successfully handled frames, even on subsequent failure.
+ * When it is safe to write, the count is set to zero even for invalid input
+ * arguments; a delivered pointer aliasing stream/chunk storage is not written.
  */
 ores_iot_status ores_iot_stream_feed(
     ores_iot_stream *stream, const uint8_t *chunk, size_t chunk_len,
