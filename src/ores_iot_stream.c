@@ -41,13 +41,16 @@ ores_iot_status ores_iot_stream_feed(
     size_t i;
     ores_iot_status status = ORES_IOT_OK;
     if (delivered == NULL) return ORES_IOT_INVALID_ARGUMENT;
-    if (stream == NULL || handler == NULL || (chunk_len != 0 && chunk == NULL))
-        return ORES_IOT_INVALID_ARGUMENT;
+    /* Reject conflicting output storage before any write, but clear a safe
+     * count on every other entry path (including invalid input arguments). */
     if (overlaps_region(stream, sizeof(*stream), delivered, sizeof(*delivered)) ||
-        overlaps_region(chunk, chunk_len, delivered, sizeof(*delivered)) ||
-        overlaps_region(stream, sizeof(*stream), chunk, chunk_len))
+        overlaps_region(chunk, chunk_len, delivered, sizeof(*delivered)))
         return ORES_IOT_INVALID_ARGUMENT;
     *delivered = 0;
+    if (stream == NULL || handler == NULL || (chunk_len != 0 && chunk == NULL))
+        return ORES_IOT_INVALID_ARGUMENT;
+    if (overlaps_region(stream, sizeof(*stream), chunk, chunk_len))
+        return ORES_IOT_INVALID_ARGUMENT;
     if (stream->busy) return ORES_IOT_INVALID_ARGUMENT;
     if (stream->failed) return ORES_IOT_CLOSED;
     if (chunk_len > ORES_IOT_MAX_FEED_BYTES) return ORES_IOT_TOO_LARGE;
