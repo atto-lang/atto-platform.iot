@@ -53,9 +53,20 @@ int main(void) {
     assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_OK);
     assert(delivered == 1 && s.count == 4);
+    /* Reused counters must not leak a stale positive delivery count after
+     * rejected calls. The stream remains usable after invalid arguments. */
+    delivered = 99;
     assert(ores_iot_stream_feed(&stream, NULL, 1, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered == 0 && stream.failed == 0 && stream.used == 0);
+    delivered = 99;
     assert(ores_iot_stream_feed(&stream, frame, size, NULL, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered == 0 && stream.failed == 0);
+    delivered = 99;
+    assert(ores_iot_stream_feed(NULL, frame, size, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered == 0);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, NULL) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_OK);
+    assert(delivered == 1 && s.count == 5);
     assert(ores_iot_stream_feed(&stream, stream.buffer, 1, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &stream.used) == ORES_IOT_INVALID_ARGUMENT);
     {
