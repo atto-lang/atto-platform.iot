@@ -28,6 +28,8 @@ ores_iot_status ores_iot_stream_init(ores_iot_stream *stream);
  * Invalid headers/callback errors poison the stream; it returns CLOSED until init.
  * Limit each call to 4096 bytes; caller must split longer reads.
  * Caller must not initialize/feed concurrently or during callbacks.
+ * chunk and delivered must not alias stream storage; delivered must not alias chunk.
+ * Callback-side stream reinitialization/state mutation is detected and poisons the stream.
  * 'delivered' counts successfully handled frames, even on subsequent failure.
  */
 ores_iot_status ores_iot_stream_feed(

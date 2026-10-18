@@ -19,6 +19,10 @@ static ores_iot_status failure(void *ctx, const ores_iot_view *view) {
     (void)ctx; (void)view;
     return ORES_IOT_INVALID_ARGUMENT;
 }
+static ores_iot_status reinitialize(void *ctx, const ores_iot_view *view) {
+    (void)view;
+    return ores_iot_stream_init((ores_iot_stream *)ctx);
+}
 int main(void) {
     ores_iot_stream stream;
     uint8_t frame[ORES_IOT_MAX_FRAME_BYTES], pair[2 * ORES_IOT_MAX_FRAME_BYTES];
@@ -52,6 +56,8 @@ int main(void) {
     assert(ores_iot_stream_feed(&stream, NULL, 1, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     assert(ores_iot_stream_feed(&stream, frame, size, NULL, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, NULL) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_feed(&stream, stream.buffer, 1, callback, &s, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &stream.used) == ORES_IOT_INVALID_ARGUMENT);
     {
         static uint8_t oversized[ORES_IOT_MAX_FEED_BYTES + 1u];
         assert(ores_iot_stream_feed(&stream, oversized, sizeof oversized,
@@ -77,6 +83,10 @@ int main(void) {
             assert(ores_iot_stream_finish(&stream) == ORES_IOT_CLOSED);
         }
     }
+    assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+    assert(ores_iot_stream_feed(&stream, frame, size, reinitialize, &stream, &delivered) == ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered == 0 && stream.failed == 1 && stream.busy == 0);
+    assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_CLOSED);
     assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
     assert(ores_iot_stream_feed(&stream, frame, size, callback, &s, &delivered) == ORES_IOT_OK);
     assert(delivered == 1);

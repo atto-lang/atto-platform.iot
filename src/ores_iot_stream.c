@@ -1,4 +1,14 @@
 #include "ores_iot_stream.h"
+#include <stdint.h>
+
+static int overlaps_region(const void *left, size_t left_len,
+                           const void *right, size_t right_len) {
+    uintptr_t a, b;
+    if (left == NULL || right == NULL || left_len == 0 || right_len == 0) return 0;
+    a = (uintptr_t)left;
+    b = (uintptr_t)right;
+    return a >= b ? a - b < right_len : b - a < left_len;
+}
 
 static ores_iot_status inspect_header(const uint8_t *p, size_t *expected) {
     size_t length;
@@ -31,9 +41,13 @@ ores_iot_status ores_iot_stream_feed(
     size_t i;
     ores_iot_status status = ORES_IOT_OK;
     if (delivered == NULL) return ORES_IOT_INVALID_ARGUMENT;
-    *delivered = 0;
     if (stream == NULL || handler == NULL || (chunk_len != 0 && chunk == NULL))
         return ORES_IOT_INVALID_ARGUMENT;
+    if (overlaps_region(stream, sizeof(*stream), delivered, sizeof(*delivered)) ||
+        overlaps_region(chunk, chunk_len, delivered, sizeof(*delivered)) ||
+        overlaps_region(stream, sizeof(*stream), chunk, chunk_len))
+        return ORES_IOT_INVALID_ARGUMENT;
+    *delivered = 0;
     if (stream->busy) return ORES_IOT_INVALID_ARGUMENT;
     if (stream->failed) return ORES_IOT_CLOSED;
     if (chunk_len > ORES_IOT_MAX_FEED_BYTES) return ORES_IOT_TOO_LARGE;
@@ -50,10 +64,16 @@ ores_iot_status ores_iot_stream_feed(
             if (status != ORES_IOT_OK) break;
         }
         if (stream->expected != 0 && stream->used == stream->expected) {
+            size_t expected = stream->expected;
             status = ores_iot_decode(stream->buffer, stream->used, &view);
             if (status != ORES_IOT_OK) break;
             status = handler(ctx, &view);
             if (status != ORES_IOT_OK) break;
+            if (!stream->busy || stream->failed ||
+                stream->used != expected || stream->expected != expected) {
+                status = ORES_IOT_INVALID_ARGUMENT;
+                break;
+            }
             ++(*delivered);
             stream->used = 0;
             stream->expected = 0;
