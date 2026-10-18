@@ -19,3 +19,18 @@ The v1 frame codec does **none** of the crypto/authenticity/authorization tasks.
 ## Failure containment
 
 The stream parser now rejects calls exceeding a 4096-byte feed budget, fails closed after malformed input and callback errors, and requires explicit reinitialization. These are input-processing constraints, **not** transport authentication or replay protection.
+
+## Replay window integration requirements
+
+The experimental `ores_iot_replay` window tracks a 64-message receive
+window, not authenticity. An attacker may advance the window arbitrarily
+unless sequence, identity, key epoch and command bytes are covered by an
+independently verified MAC or AEAD tag **before** `admit` is invoked.
+The caller must enforce a monotonic durable checkpoint in a trusted
+transaction **before** a command has external effects. If checkpoint
+persistence fails, do not execute the command; if identity rotates,
+provision an authenticated new key epoch and replay checkpoint. Never
+reuse a persisted checkpoint with a different peer/key; never blindly
+reinitialize at reboot. Calls are single-threaded/non-reentrant; use
+an externally serialized actor/state-loan if there are concurrent callers.
+A bare frame-codec or replay-window acceptance result is NOT authorization.
