@@ -25,6 +25,19 @@ ores_iot_replay_status ores_iot_replay_restore(
     return ORES_IOT_REPLAY_ACCEPT;
 }
 
+ores_iot_replay_status ores_iot_replay_preview(
+    const ores_iot_replay_window *committed, uint64_t sequence,
+    ores_iot_replay_window *next) {
+    ores_iot_replay_window candidate;
+    ores_iot_replay_status status;
+    if (committed == 0 || next == 0 || committed == next)
+        return ORES_IOT_REPLAY_INVALID_ARGUMENT;
+    candidate = *committed;
+    status = ores_iot_replay_admit(&candidate, sequence);
+    if (status == ORES_IOT_REPLAY_ACCEPT) *next = candidate;
+    return status;
+}
+
 ores_iot_replay_status ores_iot_replay_admit(
     ores_iot_replay_window *window, uint64_t sequence) {
     uint64_t delta, bit;
