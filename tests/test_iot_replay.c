@@ -74,6 +74,50 @@ int main(void) {
     assert(ores_iot_replay_admit(&w, 1) == ORES_IOT_REPLAY_STALE);
     assert(ores_iot_replay_admit(&w, 2) == ORES_IOT_REPLAY_ACCEPT);
     assert(ores_iot_replay_restore(&w, 0, 0) == ORES_IOT_REPLAY_ACCEPT);
+    /* Crash-safe caller sequencing: preview does not commit until persistence
+     * succeeds. Failed admission must not alter the proposed output either. */
+    {
+        ores_iot_replay_window committed = {0, 0};
+        ores_iot_replay_window next = {99, UINT64_C(0x55)};
+        ores_iot_replay_window corrupt = {4, 0};
+        assert(ores_iot_replay_preview(NULL, 1, &next) ==
+               ORES_IOT_REPLAY_INVALID_ARGUMENT);
+        assert(ores_iot_replay_preview(&committed, 1, NULL) ==
+               ORES_IOT_REPLAY_INVALID_ARGUMENT);
+        assert(ores_iot_replay_preview(&committed, 1, &committed) ==
+               ORES_IOT_REPLAY_INVALID_ARGUMENT);
+        assert(ores_iot_replay_preview(&corrupt, 1, &next) ==
+               ORES_IOT_REPLAY_INVALID_ARGUMENT);
+        assert(ores_iot_replay_preview(&committed, 0, &next) ==
+               ORES_IOT_REPLAY_INVALID_SEQUENCE);
+        CHECK_STATE(committed, 0, 0);
+        CHECK_STATE(next, 99, UINT64_C(0x55));
+        assert(ores_iot_replay_preview(&committed, 17, &next) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        CHECK_STATE(next, 17, UINT64_C(1));
+        CHECK_STATE(committed, 0, 0);
+        /* Failed persistence can abandon next and safely retry the proposal. */
+        assert(ores_iot_replay_preview(&committed, 17, &next) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        assert(ores_iot_replay_restore(&committed, next.highest, next.bitmap) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        assert(ores_iot_replay_preview(&committed, 17, &next) ==
+               ORES_IOT_REPLAY_DUPLICATE);
+        CHECK_STATE(committed, 17, UINT64_C(1));
+        CHECK_STATE(next, 17, UINT64_C(1));
+        assert(ores_iot_replay_preview(&committed, 1, &next) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        CHECK_STATE(next, 17, UINT64_C(0x10001));
+        CHECK_STATE(committed, 17, UINT64_C(1));
+        assert(ores_iot_replay_restore(&committed, next.highest, next.bitmap) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        assert(ores_iot_replay_preview(&committed, 1, &next) ==
+               ORES_IOT_REPLAY_DUPLICATE);
+        assert(ores_iot_replay_preview(&committed, UINT64_MAX, &next) ==
+               ORES_IOT_REPLAY_ACCEPT);
+        CHECK_STATE(next, UINT64_MAX, UINT64_C(1));
+        CHECK_STATE(committed, 17, UINT64_C(0x10001));
+    }
     for (i = 0; i < 40000; ++i) {
         uint64_t r = prng(&state), seq;
         ores_iot_replay_status expected, actual;
