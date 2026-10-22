@@ -23,7 +23,58 @@ static ores_iot_status reinitialize(void *ctx, const ores_iot_view *view) {
     (void)view;
     return ores_iot_stream_init((ores_iot_stream *)ctx);
 }
+static ores_iot_status chosen_status(void *ctx, const ores_iot_view *view) {
+    assert(view->length == 2 && view->payload[0] == 7 && view->payload[1] == 8);
+    return *(const ores_iot_status *)ctx;
+}
+static void assert_scrubbed(const ores_iot_stream *stream) {
+    size_t i;
+    for (i = 0; i < sizeof stream->buffer; ++i) assert(stream->buffer[i] == 0);
+}
+static void test_scrub_and_status(void) {
+    ores_iot_stream stream;
+    uint8_t frame[2 * ORES_IOT_MAX_FRAME_BYTES], payload[] = {7, 8};
+    const ores_iot_status results[] = {
+        ORES_IOT_OK, ORES_IOT_INVALID_ARGUMENT, ORES_IOT_TOO_LARGE,
+        ORES_IOT_BUFFER_TOO_SMALL, ORES_IOT_MALFORMED,
+        ORES_IOT_UNSUPPORTED_VERSION, ORES_IOT_UNSUPPORTED_KIND,
+        ORES_IOT_CLOSED, (ores_iot_status)99, (ores_iot_status)-1
+    };
+    size_t size, delivered, i;
+    assert(ores_iot_encode(ORES_IOT_TELEMETRY, payload, sizeof payload,
+                           frame, sizeof frame, &size) == ORES_IOT_OK);
+    for (i = 0; i < sizeof results / sizeof results[0]; ++i) {
+        ores_iot_status result = results[i];
+        assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+        assert(ores_iot_stream_feed(&stream, frame, size, chosen_status,
+            &result, &delivered) == (i < 8 ? result : ORES_IOT_INVALID_ARGUMENT));
+        assert(delivered == (i == 0 ? 1u : 0u));
+        assert_scrubbed(&stream);
+        if (i != 0) assert(ores_iot_stream_finish(&stream) == ORES_IOT_CLOSED);
+    }
+    /* A successful frame followed by a malformed one retains the good count. */
+    memcpy(frame + size, frame, size);
+    frame[size] = 'X';
+    {
+        ores_iot_status result = ORES_IOT_OK;
+        assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+        assert(ores_iot_stream_feed(&stream, frame, 2 * size, chosen_status,
+                                   &result, &delivered) == ORES_IOT_MALFORMED);
+        assert(delivered == 1 && stream.failed);
+        assert_scrubbed(&stream);
+        /* Every partial header/payload must survive feed and erase at EOF. */
+        for (i = 1; i < size; ++i) {
+            assert(ores_iot_stream_init(&stream) == ORES_IOT_OK);
+            assert(ores_iot_stream_feed(&stream, frame, i, chosen_status,
+                                       &result, &delivered) == ORES_IOT_OK);
+            assert(stream.buffer[0] == 'O' && stream.used == i);
+            assert(ores_iot_stream_finish(&stream) == ORES_IOT_MALFORMED);
+            assert_scrubbed(&stream);
+        }
+    }
+}
 int main(void) {
+    test_scrub_and_status();
     ores_iot_stream stream;
     uint8_t frame[ORES_IOT_MAX_FRAME_BYTES], pair[2 * ORES_IOT_MAX_FRAME_BYTES];
     const uint8_t data[] = {7u, 8u};
@@ -104,3 +155,4 @@ int main(void) {
     assert(ores_iot_stream_finish(&stream) == ORES_IOT_OK);
     return 0;
 }
+

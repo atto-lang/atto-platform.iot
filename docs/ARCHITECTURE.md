@@ -17,3 +17,18 @@ The portable C frame codec with exact-length validation, its tests, and a host d
 ## Interoperability
 
 The v1 frame is deliberately narrow to exercise native ABI and parser hardening. It is not a substitute for standard MQTT/CoAP wire formats. Any future actor messages need type IDs, versioning, message ownership and replay-safe authentication contracts.
+
+## Message ownership and cleanup
+
+The stream callback borrows parser-owned bytes only until it returns. Consumed
+frames are scrubbed with non-elidable CPU stores; malformed frames, callback
+failures, and end-of-input close also scrub the parser buffer. Partial frames
+remain available across feed calls until completion or close. This matches the
+embedded mailbox's consumed-storage cleanup principle without introducing heap
+allocation. It does not guarantee DMA/cache erasure or authenticate peers.
+
+Encode clears a safe, non-aliasing output count on every failure, matching the
+mobile copy and embedded pop contracts. An output count overlapping input or
+destination storage is rejected before any write. Stream callback return values
+outside the status enum become INVALID_ARGUMENT and close the stream.
+

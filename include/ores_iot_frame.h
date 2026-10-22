@@ -36,7 +36,9 @@ typedef struct {
 } ores_iot_view;
 
 /* Encode into caller-owned output. Input may overlap output; written must not alias
- * the payload or destination byte ranges. Aliasing is rejected before any write. */
+ * the payload or destination byte ranges. Aliasing is rejected before any write.
+ * A non-aliasing written count is zeroed on every failure, including invalid
+ * kinds, oversized messages and NULL byte pointers. */
 ores_iot_status ores_iot_encode(ores_iot_kind kind,
     const uint8_t *payload, size_t payload_len,
     uint8_t *destination, size_t capacity, size_t *written);
@@ -50,3 +52,4 @@ ores_iot_status ores_iot_decode(const uint8_t *frame,
 }
 #endif
 #endif
+

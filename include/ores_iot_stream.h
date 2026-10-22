@@ -30,6 +30,10 @@ ores_iot_status ores_iot_stream_init(ores_iot_stream *stream);
  * Caller must not initialize/feed concurrently or during callbacks.
  * chunk and delivered must not alias stream storage; delivered must not alias chunk.
  * Callback-side stream reinitialization/state mutation is detected and poisons the stream.
+ * Consumed frames, callback/header failures and finish scrub the parser buffer
+ * with non-elidable CPU-side stores after the callback borrow ends. Partial
+ * input remains buffered until completion or finish; this is not DMA/cache
+ * isolation. Callback statuses outside the declared enum become INVALID_ARGUMENT.
  * 'delivered' counts successfully handled frames, even on subsequent failure.
  * When it is safe to write, the count is set to zero even for invalid input
  * arguments; a delivered pointer aliasing stream/chunk storage is not written.
@@ -47,3 +51,4 @@ ores_iot_status ores_iot_stream_finish(ores_iot_stream *stream);
 }
 #endif
 #endif
+

@@ -20,14 +20,14 @@ ores_iot_status ores_iot_encode(ores_iot_kind kind,
     uint8_t *destination, size_t capacity, size_t *written) {
     size_t total;
     if (written == NULL) return ORES_IOT_INVALID_ARGUMENT;
-    if (!valid_kind((unsigned)kind)) return ORES_IOT_UNSUPPORTED_KIND;
-    if (payload_len > ORES_IOT_MAX_PAYLOAD_BYTES) return ORES_IOT_TOO_LARGE;
-    if ((payload_len != 0 && payload == NULL) || destination == NULL)
-        return ORES_IOT_INVALID_ARGUMENT;
     if (overlaps_region(payload, payload_len, written, sizeof(*written)) ||
         overlaps_region(destination, capacity, written, sizeof(*written)))
         return ORES_IOT_INVALID_ARGUMENT;
     *written = 0;
+    if (!valid_kind((unsigned)kind)) return ORES_IOT_UNSUPPORTED_KIND;
+    if (payload_len > ORES_IOT_MAX_PAYLOAD_BYTES) return ORES_IOT_TOO_LARGE;
+    if ((payload_len != 0 && payload == NULL) || destination == NULL)
+        return ORES_IOT_INVALID_ARGUMENT;
     total = ORES_IOT_HEADER_BYTES + payload_len;
     if (capacity < total) return ORES_IOT_BUFFER_TOO_SMALL;
     /* Copy before writing the header: overlapping input/output is supported. */
@@ -70,3 +70,4 @@ ores_iot_status ores_iot_decode(const uint8_t *frame,
     out->length = payload_len;
     return ORES_IOT_OK;
 }
+

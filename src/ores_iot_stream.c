@@ -1,6 +1,13 @@
 #include "ores_iot_stream.h"
 #include <stdint.h>
 
+/* CPU-side erasure only; the callback borrow has ended before this runs. */
+static void scrub_buffer(ores_iot_stream *stream) {
+    volatile uint8_t *p = stream->buffer;
+    size_t i;
+    for (i = 0; i < ORES_IOT_MAX_FRAME_BYTES; ++i) p[i] = 0;
+}
+
 static int overlaps_region(const void *left, size_t left_len,
                            const void *right, size_t right_len) {
     uintptr_t a, b;
@@ -25,9 +32,8 @@ static ores_iot_status inspect_header(const uint8_t *p, size_t *expected) {
 }
 
 ores_iot_status ores_iot_stream_init(ores_iot_stream *stream) {
-    size_t i;
     if (stream == NULL) return ORES_IOT_INVALID_ARGUMENT;
-    for (i = 0; i < ORES_IOT_MAX_FRAME_BYTES; ++i) stream->buffer[i] = 0;
+    scrub_buffer(stream);
     stream->used = 0;
     stream->expected = 0;
     stream->busy = 0;
@@ -71,6 +77,8 @@ ores_iot_status ores_iot_stream_feed(
             status = ores_iot_decode(stream->buffer, stream->used, &view);
             if (status != ORES_IOT_OK) break;
             status = handler(ctx, &view);
+            if (status < ORES_IOT_OK || status > ORES_IOT_CLOSED)
+                status = ORES_IOT_INVALID_ARGUMENT;
             if (status != ORES_IOT_OK) break;
             if (!stream->busy || stream->failed ||
                 stream->used != expected || stream->expected != expected) {
@@ -78,11 +86,13 @@ ores_iot_status ores_iot_stream_feed(
                 break;
             }
             ++(*delivered);
+            scrub_buffer(stream);
             stream->used = 0;
             stream->expected = 0;
         }
     }
     if (status != ORES_IOT_OK) {
+        scrub_buffer(stream);
         /* Reset to prevent accepting tail of a malformed frame as a header. */
         stream->used = 0;
         stream->expected = 0;
@@ -97,8 +107,10 @@ ores_iot_status ores_iot_stream_finish(ores_iot_stream *stream) {
     if (stream == NULL || stream->busy) return ORES_IOT_INVALID_ARGUMENT;
     if (stream->failed) return ORES_IOT_CLOSED;
     status = stream->used == 0 && stream->expected == 0 ? ORES_IOT_OK : ORES_IOT_MALFORMED;
+    scrub_buffer(stream);
     stream->used = 0;
     stream->expected = 0;
     stream->failed = 1;
     return status;
 }
+

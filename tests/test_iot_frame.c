@@ -40,8 +40,24 @@ int main(void) {
     assert(written == ORES_IOT_HEADER_BYTES);
     assert(ores_iot_decode(frame, written, &parsed) == ORES_IOT_OK);
     assert(parsed.kind == ORES_IOT_ACK && parsed.length == 0);
-    assert(ores_iot_encode(ORES_IOT_COMMAND, data, ORES_IOT_MAX_PAYLOAD_BYTES + 1u,
-                           frame, sizeof frame, &written) == ORES_IOT_TOO_LARGE);
+    {
+        static uint8_t oversized[ORES_IOT_MAX_PAYLOAD_BYTES + 1u];
+        memset(frame, 0xa5, sizeof frame);
+        written = 777;
+        assert(ores_iot_encode(ORES_IOT_COMMAND, oversized, sizeof oversized,
+                               frame, sizeof frame, &written) == ORES_IOT_TOO_LARGE);
+        assert(written == 0 && frame[0] == 0xa5);
+        written = 777;
+        assert(ores_iot_encode((ores_iot_kind)99, data, sizeof data,
+                               frame, sizeof frame, &written) == ORES_IOT_UNSUPPORTED_KIND);
+        assert(written == 0 && frame[0] == 0xa5);
+        written = 777;
+        assert(ores_iot_encode(ORES_IOT_ACK, NULL, 1, frame, sizeof frame, &written) == ORES_IOT_INVALID_ARGUMENT);
+        assert(written == 0 && frame[0] == 0xa5);
+        written = 777;
+        assert(ores_iot_encode(ORES_IOT_ACK, data, sizeof data, NULL, 0, &written) == ORES_IOT_INVALID_ARGUMENT);
+        assert(written == 0);
+    }
     /* Reject output metadata aliases before touching payload or destination bytes. */
     {
         union { size_t written; ores_iot_view view; uint8_t bytes[64]; } alias;
@@ -72,3 +88,4 @@ int main(void) {
     }
     return 0;
 }
+
