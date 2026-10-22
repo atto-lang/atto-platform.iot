@@ -16,7 +16,11 @@ typedef struct {
 } ores_iot_checkpoint_posix;
 
 /* On success, init opens a trusted directory and configures an adapter.
- * Call close once when initialized. Never copy this struct after opening. */
+ * Call close once when initialized. Never copy this struct after opening.
+ * read_slot: reads a complete 64-byte snapshot or returns failure without
+ * modifying the caller's output. Every attempted valid read invalidates and
+ * scrubs the prior staged slot first; failed reads cannot be flushed or
+ * committed using cached bytes. A missing slot reads as 64 zero bytes. */
 int ores_iot_checkpoint_posix_open(ores_iot_checkpoint_posix *store,
                                    const char *trusted_directory);
 void ores_iot_checkpoint_posix_close(ores_iot_checkpoint_posix *store);
