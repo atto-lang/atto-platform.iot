@@ -92,3 +92,39 @@ slots alone do not prevent malicious rollback. A trusted monotonic authority,
 MAC/AEAD binding, physical power-cut tests, and an idempotent-effect/outbox
 protocol are separate requirements where applicable. A crash after checkpoint
 publication but before an effect can lose the effect: no exactly-once guarantee.
+
+### Ordered checkpoint-storage adapter (host reference)
+
+`ores_iot_checkpoint_load` and `ores_iot_checkpoint_commit_sequence`
+in `include/ores_iot_checkpoint_store.h` use a caller-owned two-slot
+`ores_iot_checkpoint_io` callback interface. The commit operation re-reads
+durable state, checks expected generation, previews the authenticated replay
+sequence, and writes only the older/inactive slot. Order:
+
+1. Write an **unpublished** zero marker to the inactive slot and flush it.
+2. Write the 56-byte versioned record and flush it.
+3. Atomically publish the 8-byte marker **durably**.
+
+The `publish_marker` callback MUST guarantee atomic power-loss-safe publication
+and durability before returning success. The `flush` callback MUST order and
+durably persist prior successful writes. Merely issuing a POSIX `pwrite`, a
+file `fsync`, or an ordinary MCU word-store is NOT automatically proof of an
+atomic 8-byte crash-safe marker for every filesystem or flash geometry.
+Platform teams must validate these properties using their storage hardware,
+flash erase rules, sector layout, device write caches and true power-cut tests.
+Operations must be serialized per authenticated peer/key epoch; the expected
+generation check does not replace external concurrency exclusion.
+
+Any failure after an attempted storage mutation returns `IN_DOUBT`: the final
+marker may have been published even if a callback reported failure. Discard
+cached state, reload trusted durable checkpoints, and re-evaluate the message.
+Uninitialized storage, invalid checkpoints, conflicting generations, and
+counter exhaustion fail closed. Trusted provisioning, cryptographic identity
+and epoch binding, hardware monotonic rollback protection, and exactly-once
+effects remain separate integration requirements.
+
+`iot_checkpoint_ordered_store_failpoints` tests a simulated durable write
+buffer, both write barriers, all injected partial-write lengths, the final
+ambiguous-commit outcome, stale expected generations, duplicate/stale replay,
+generation exhaustion and two consecutive slot rotations. The simulator
+is NOT proof of any real storage driver's durability guarantees.
