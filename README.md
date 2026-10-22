@@ -191,3 +191,30 @@ The syscall harness is **not** a filesystem power-cut simulator:
 test-reported errors after successful system calls are synthetic.
 Do not infer POSIX/storage crash durability or end-to-end Oreslang
 guest parity without independent target evidence.
+
+### Crash-orphan cleanup and stricter checkpoint file trust
+
+On opening the Linux host adapter, after acquiring its exclusive advisory
+directory lock, the adapter scans for old temporary files matching only its
+own `.slot[01].<pid>.<serial>.tmp` naming convention. It removes at most 128
+matching files per open and fsyncs the directory after cleanup. It will only
+delete owner-owned regular files with one hard link, exact mode `0600`, and
+length at most 64 bytes. Suspicious matching symlinks, hardlinks, permissive
+files or oversized files cause open to fail closed. Unrelated directory
+entries are left untouched. The directory must remain exclusively dedicated
+to this store and inaccessible to noncooperating writers.
+
+Checkpoint slot reads also require owner ownership, exact private `0600`
+permissions, a single hard link, regular file type and exact 64-byte size.
+Failures invalidate and scrub staging and leave caller output untouched.
+
+`iot_posix_owned_orphan_cleanup` covers owned temp removal, untouched
+unrelated files, suspicious symlinks, permissions and oversized names/files.
+`iot_posix_fsync_rename_process_crashes` additionally checks reopen cleanup
+and fails closed for nonprivate checkpoint slots.
+
+**Boundaries:** this is Linux host-only behavior and does not establish
+anti-rollback, external protection against writers that ignore advisory
+locks, or true power-loss durability. Cleaning known temporary files cannot
+repair a corrupt published checkpoint, nor does it allow recovery from an
+untrusted checkpoint by selecting an older generation.
