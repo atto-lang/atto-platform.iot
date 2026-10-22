@@ -41,3 +41,23 @@ as a protocol or disk schema; encode/decode versioned integer fields.
 `init()` only starts a new trusted identity/epoch, never resumes a device
 after a power cycle. The primitive has no crypto, storage, provisioning,
 fleet-management, MQTT or CoAP implementation.
+
+
+### Transactional replay preview and crash-point model
+
+`ores_iot_replay_preview(committed, sequence, next)` proposes a new
+64-sequence watermark without changing the committed in-memory state.
+The caller must authenticate and serialize the peer/key-epoch stream,
+persist a versioned checkpoint durably, then publish the candidate before
+executing externally visible work. Do not call `ores_iot_replay_admit`
+on the live window as a substitute for durable admission.
+
+`iot_replay_crash_points` is an **in-memory model** of a caller-owned
+two-slot checkpoint: it injects failures before/during publication,
+rejects a corrupted published snapshot, and demonstrates that replay can
+be rejected even when the associated effect was lost. It is not proof
+of storage atomicity, real power-cut recovery, MAC/AEAD integrity, or
+exactly-once effects. A production storage implementation must provide
+fail-closed recovery and verified durability ordering. If effects need
+exactly-once semantics, add a separately designed transactional outbox
+or idempotent handler with a durable effect record.
