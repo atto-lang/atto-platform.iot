@@ -38,7 +38,8 @@ ores_iot_replay_status ores_iot_replay_restore(
  * Under the caller's serialization boundary: authenticate the frame, preview,
  * durably checkpoint the complete candidate, then publish/commit and apply
  * externally visible effects. This API does not perform I/O or guarantee
- * atomicity across the durable store and those external effects. */
+ * atomicity across the durable store and those external effects; a crash
+ * after checkpointing but before side effects can suppress an effect. */
 ores_iot_replay_status ores_iot_replay_preview(
     const ores_iot_replay_window *committed, uint64_t sequence,
     ores_iot_replay_window *next);
