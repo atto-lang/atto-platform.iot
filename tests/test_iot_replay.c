@@ -128,8 +128,22 @@ int main(void) {
         else if (i % 3 == 0 && m.highest > 1) seq = m.highest - (r % 128);
         else seq = (m.highest ? m.highest : 100) + (r % 31) - 15;
         expected = model_admit(&m, seq);
-        actual = ores_iot_replay_admit(&w, seq);
-        assert(actual == expected);
+        {
+            ores_iot_replay_window candidate = {UINT64_MAX, UINT64_MAX};
+            ores_iot_replay_window prior = w;
+            ores_iot_replay_status preview =
+                ores_iot_replay_preview(&w, seq, &candidate);
+            assert(preview == expected);
+            assert(w.highest == prior.highest && w.bitmap == prior.bitmap);
+            actual = ores_iot_replay_admit(&w, seq);
+            assert(actual == expected);
+            if (preview == ORES_IOT_REPLAY_ACCEPT) {
+                assert(candidate.highest == w.highest &&
+                       candidate.bitmap == w.bitmap);
+            } else {
+                CHECK_STATE(candidate, UINT64_MAX, UINT64_MAX);
+            }
+        }
         if (actual == ORES_IOT_REPLAY_ACCEPT) ++accepts;
         if (actual == ORES_IOT_REPLAY_DUPLICATE) ++dupes;
         if (actual == ORES_IOT_REPLAY_STALE) ++stale;
