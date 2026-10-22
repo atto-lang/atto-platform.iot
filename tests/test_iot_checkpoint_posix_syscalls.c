@@ -144,6 +144,13 @@ static void read_faults(void) {
     inject(HOOK_READ,FAIL_EIO,1);
     assert(!io.read_slot(io.context,0,received));
     assert(attempts==1);
+    for(size_t i=0;i<64;++i) {
+        assert(received[i]==0xa5);
+        assert(store.staged[0][i]==0);
+    }
+    inject(HOOK_NONE,NO_FAULT,0);
+    /* Failed reads must invalidate cached state; no stale flush allowed. */
+    assert(!io.flush(io.context,0));
     inject(HOOK_READ,FAIL_EINTR,1);
     assert(io.read_slot(io.context,0,received));
     assert(attempts==1);
