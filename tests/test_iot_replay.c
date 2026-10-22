@@ -74,8 +74,8 @@ int main(void) {
     assert(ores_iot_replay_admit(&w, 1) == ORES_IOT_REPLAY_STALE);
     assert(ores_iot_replay_admit(&w, 2) == ORES_IOT_REPLAY_ACCEPT);
     assert(ores_iot_replay_restore(&w, 0, 0) == ORES_IOT_REPLAY_ACCEPT);
-    /* Crash-safe caller sequencing: preview does not commit until persistence
-     * succeeds. Failed admission must not alter the proposed output either. */
+    /* Persistence-first caller sequencing: preview does not commit until
+     * persistence succeeds. Rejected proposals leave the output untouched. */
     {
         ores_iot_replay_window committed = {0, 0};
         ores_iot_replay_window next = {99, UINT64_C(0x55)};
