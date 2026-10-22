@@ -1,8 +1,11 @@
 #include "ores_iot_checkpoint_store.h"
 #include <string.h>
 
-static int valid_io(const ores_iot_checkpoint_io *io) {
-    return io && io->read_slot && io->write_bytes && io->flush &&
+static int valid_read_io(const ores_iot_checkpoint_io *io) {
+    return io && io->read_slot;
+}
+static int valid_write_io(const ores_iot_checkpoint_io *io) {
+    return valid_read_io(io) && io->write_bytes && io->flush &&
            io->publish_marker;
 }
 
@@ -38,7 +41,7 @@ ores_iot_store_status ores_iot_checkpoint_load(
     uint8_t a[ORES_IOT_CHECKPOINT_BYTES], b[ORES_IOT_CHECKPOINT_BYTES];
     ores_iot_checkpoint_value current;
     ores_iot_store_status status;
-    if (!valid_io(io) || !out || !peer_binding || !key_epoch)
+    if (!valid_read_io(io) || !out || !peer_binding || !key_epoch)
         return ORES_IOT_STORE_INVALID_ARGUMENT;
     status=load_slots(io,peer_binding,key_epoch,a,b,&current,0);
     if (status==ORES_IOT_STORE_OK) *out=current;
@@ -56,7 +59,7 @@ ores_iot_store_status ores_iot_checkpoint_commit_sequence(
     ores_iot_replay_status replay;
     ores_iot_store_status status;
     unsigned target=0;
-    if (!valid_io(io) || !out || !peer_binding || !key_epoch ||
+    if (!valid_write_io(io) || !out || !peer_binding || !key_epoch ||
         !expected_generation) return ORES_IOT_STORE_INVALID_ARGUMENT;
     status=load_slots(io,peer_binding,key_epoch,a,b,&current,&target);
     if (status!=ORES_IOT_STORE_OK) return status;
