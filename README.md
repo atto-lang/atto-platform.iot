@@ -61,3 +61,34 @@ exactly-once effects. A production storage implementation must provide
 fail-closed recovery and verified durability ordering. If effects need
 exactly-once semantics, add a separately designed transactional outbox
 or idempotent handler with a durable effect record.
+
+### Binary checkpoint codec v1 — experimental host reference
+
+`include/ores_iot_checkpoint.h` and `src/ores_iot_checkpoint.c` now encode
+the replay-window state in a **fixed 64-byte little-endian record**, independently
+of C struct padding and host endianness. It contains magic/version, a caller-
+supplied authenticated peer binding, key epoch, generation counter, replay
+window, CRC32C plus complement, and an eight-byte final commit marker.
+All-zero commit markers mean **unpublished**. A nonzero invalid commit marker,
+a damaged published record, duplicate generations, and wrong identity/epoch
+fail closed. If both slots are published, the highest generation wins.
+
+`iot_checkpoint_every_byte_torn_write` enumerates all 57 possible prefix
+lengths of a prepared record (0 through 56), all seven partial nonzero
+publication markers, and mutations of each of the 64 published bytes. The
+test also covers duplicate-generation denial, foreign identity/epoch, invalid
+window state, buffer aliasing, version incompatibility, and empty storage.
+The codec allocates no heap memory and does not access the filesystem.
+
+**Not a flash/filesystem driver or durability proof.** For real storage,
+serialize all admissions for each authenticated peer/key epoch, keep the latest
+record intact while updating the older slot, durably invalidate the target
+slot's marker, durably write and flush its bytes 0–55, then atomically write
+and durably flush the final eight-byte marker. Only after that final barrier
+may externally visible effects run. Target hardware/storage **must guarantee**
+the atomic-marker and flush-order requirements; otherwise the format is
+unsuitable for production. CRC32C is not cryptographic integrity, and two
+slots alone do not prevent malicious rollback. A trusted monotonic authority,
+MAC/AEAD binding, physical power-cut tests, and an idempotent-effect/outbox
+protocol are separate requirements where applicable. A crash after checkpoint
+publication but before an effect can lose the effect: no exactly-once guarantee.
