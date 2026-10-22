@@ -144,6 +144,29 @@ int main(void) {
     io=ores_iot_checkpoint_posix_adapter(&store);
     assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_EMPTY);
     ores_iot_checkpoint_posix_close(&store);
+    /* Crash leftovers are cleaned after acquiring the exclusive lease. */
+    {
+        char orphan[512];
+        int tempfd;
+        assert(snprintf(orphan,sizeof orphan,"%s/.slot0.444.123.tmp",pattern)>0);
+        tempfd=open(orphan,O_WRONLY|O_CREAT|O_EXCL,0600);
+        assert(tempfd>=0);
+        assert(write(tempfd,"abcd",4)==4 && close(tempfd)==0);
+        assert(ores_iot_checkpoint_posix_open(&store,pattern));
+        assert(access(orphan,F_OK)!=0);
+        ores_iot_checkpoint_posix_close(&store);
+        /* Never unlink a matching malicious symlink or permissive file. */
+        assert(symlink("/etc/passwd",orphan)==0);
+        assert(!ores_iot_checkpoint_posix_open(&store,pattern));
+        assert(access(orphan,F_OK)==0);
+        assert(unlink(orphan)==0);
+        tempfd=open(orphan,O_WRONLY|O_CREAT|O_EXCL,0600);
+        assert(tempfd>=0 && close(tempfd)==0);
+        assert(chmod(orphan,0644)==0);
+        assert(!ores_iot_checkpoint_posix_open(&store,pattern));
+        assert(access(orphan,F_OK)==0);
+        assert(unlink(orphan)==0);
+    }
     {
         size_t i;
         const uint8_t *raw=(const uint8_t *)store.staged;
@@ -154,6 +177,14 @@ int main(void) {
     io=ores_iot_checkpoint_posix_adapter(&store);
     check(&io,7,16);
     ores_iot_checkpoint_posix_close(&store);
+    /* Valid-length but nonprivate slot files are not trusted. */
+    snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
+    assert(chmod(file,0644)==0);
+    assert(ores_iot_checkpoint_posix_open(&store,pattern));
+    io=ores_iot_checkpoint_posix_adapter(&store);
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_IO_ERROR);
+    ores_iot_checkpoint_posix_close(&store);
+    assert(chmod(file,0600)==0);
     snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
     fd=open(file,O_RDWR);assert(fd>=0);
     /* Never downgrade to another published slot after corruption. */
