@@ -1,5 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 #include "ores_iot_checkpoint_posix.h"
+#include "ores_iot_posix_orphans_internal.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -26,7 +27,8 @@ int ores_iot_checkpoint_posix_open(ores_iot_checkpoint_posix *store,
     int fd;
     if (!store || !trusted_directory || !trusted_directory[0]) return 0;
     fd = open(trusted_directory, O_RDONLY|O_DIRECTORY|O_CLOEXEC|O_NOFOLLOW);
-    if (!safe_fd(fd) || flock(fd, LOCK_EX|LOCK_NB)!=0) {
+    if (!safe_fd(fd) || flock(fd, LOCK_EX|LOCK_NB)!=0 ||
+        !ores_iot_cleanup_orphan_temps(fd)) {
         if (fd >= 0) close(fd);
         return 0;
     }
@@ -69,6 +71,7 @@ static int read_slot(void *context, unsigned slot,
     } else {
         int ok=fstat(fd,&st)==0 && S_ISREG(st.st_mode) &&
                st.st_size==(off_t)ORES_IOT_CHECKPOINT_BYTES &&
+               st.st_uid==geteuid() && (st.st_mode & 0777)==0600 &&
                st.st_nlink == 1;
         while(ok && n<ORES_IOT_CHECKPOINT_BYTES) {
             ssize_t got=read(fd,snapshot+n,ORES_IOT_CHECKPOINT_BYTES-n);
