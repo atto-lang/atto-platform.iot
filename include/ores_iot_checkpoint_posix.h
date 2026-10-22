@@ -1,0 +1,26 @@
+#ifndef ORES_IOT_CHECKPOINT_POSIX_H
+#define ORES_IOT_CHECKPOINT_POSIX_H
+#include "ores_iot_checkpoint_store.h"
+
+/* Linux host reference, not a substitute for verified flash/SSD power-cut
+ * guarantees. The caller supplies a private (0700), owned, stable directory.
+ * Acquire an exclusive, nonblocking advisory flock on the directory for the
+ * entire adapter lifetime. The directory must remain private and stable.
+ * Do not share an opened adapter across fork; re-open in the child. */
+typedef struct {
+    int dirfd;
+    unsigned long serial;
+    long owner_pid;
+    uint8_t staged[2][ORES_IOT_CHECKPOINT_BYTES];
+    unsigned char loaded[2];
+} ores_iot_checkpoint_posix;
+
+/* On success, init opens a trusted directory and configures an adapter.
+ * Call close once when initialized. Never copy this struct after opening. */
+int ores_iot_checkpoint_posix_open(ores_iot_checkpoint_posix *store,
+                                   const char *trusted_directory);
+void ores_iot_checkpoint_posix_close(ores_iot_checkpoint_posix *store);
+ores_iot_checkpoint_io ores_iot_checkpoint_posix_adapter(
+    ores_iot_checkpoint_posix *store);
+
+#endif
