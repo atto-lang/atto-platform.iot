@@ -168,3 +168,26 @@ trusted record, authenticated peer/epoch binding, hardware anti-rollback,
 cross-process enforcement against noncooperating writers and exactly-once
 external effects are not provided. Do not promote this example to an
 embedded/IoT production security claim solely from passing host CTests.
+
+### POSIX syscall fault-injection hardening (experimental)
+
+`iot_posix_syscall_fault_matrix` compiles the **actual adapter source**
+under test-only syscall interposition and injects `EINTR`, `EIO`,
+`ENOSPC`, short/zero writes, `read` failures, failed `openat`, `close`,
+file/directory `fsync`, and `renameat` failures both before and after
+the operation. The test asserts that failed pre-rename attempts leave
+no visible checkpoint and cleans up their temp files; after-rename
+failures may leave a visible checkpoint and MUST be handled as
+`IN_DOUBT` by the ordered storage layer.
+
+The regression also found and fixes a stale staged-slot issue: a failed
+read after a successful read could previously leave `loaded[slot]` true.
+Now a valid read attempt invalidates and erases the previous staged
+slot, reads into a temporary buffer, then publishes new cache/output
+bytes only after a complete successful read and close. Failed reads
+leave caller output unchanged and prohibit flushing stale state.
+
+The syscall harness is **not** a filesystem power-cut simulator:
+test-reported errors after successful system calls are synthetic.
+Do not infer POSIX/storage crash durability or end-to-end Oreslang
+guest parity without independent target evidence.
