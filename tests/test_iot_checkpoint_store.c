@@ -121,6 +121,9 @@ static void test_success(void) {
     io=adapter(&d);
     assert(ores_iot_checkpoint_load(0,PEER,EPOCH,&value)==ORES_IOT_STORE_INVALID_ARGUMENT);
     io.publish_marker=0;
+    io.write_bytes=0;
+    io.flush=0;
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&value)==ORES_IOT_STORE_OK);
     assert(ores_iot_checkpoint_commit_sequence(&io,PEER,EPOCH,3,13,&value)==ORES_IOT_STORE_INVALID_ARGUMENT);
     d.fail_read=1;
     assert(load(&d,&value)==ORES_IOT_STORE_IO_ERROR);
