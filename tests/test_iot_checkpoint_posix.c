@@ -165,6 +165,21 @@ int main(void) {
     ores_iot_checkpoint_posix_close(&store);
     snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
     assert(unlink(file)==0);
+    /* Existing symlinks and truncated slot files fail closed. */
+    assert(symlink("/etc/passwd",file)==0);
+    assert(ores_iot_checkpoint_posix_open(&store,pattern));
+    io=ores_iot_checkpoint_posix_adapter(&store);
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_IO_ERROR);
+    ores_iot_checkpoint_posix_close(&store);
+    assert(unlink(file)==0);
+    fd=open(file,O_CREAT|O_EXCL|O_WRONLY,0600);assert(fd>=0);
+    assert(write(fd,"X",1)==1);
+    assert(close(fd)==0);
+    assert(ores_iot_checkpoint_posix_open(&store,pattern));
+    io=ores_iot_checkpoint_posix_adapter(&store);
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_IO_ERROR);
+    ores_iot_checkpoint_posix_close(&store);
+    assert(unlink(file)==0);
     snprintf(file,sizeof file,"%s/slot1.ockp",pattern);
     assert(unlink(file)==0);
     assert(rmdir(pattern)==0);
