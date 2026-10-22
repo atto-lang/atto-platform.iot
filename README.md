@@ -128,3 +128,43 @@ buffer, both write barriers, all injected partial-write lengths, the final
 ambiguous-commit outcome, stale expected generations, duplicate/stale replay,
 generation exhaustion and two consecutive slot rotations. The simulator
 is NOT proof of any real storage driver's durability guarantees.
+
+### Linux checkpoint filesystem adapter (host-only reference)
+
+`src/ores_iot_checkpoint_posix.c` and `include/ores_iot_checkpoint_posix.h`
+provide a **Linux-only** `ores_iot_checkpoint_io` implementation backed
+by two 64-byte slot files in a caller-provisioned, stable, owner-owned
+private (0700) directory. This is optional (`ores_iot_checkpoint_posix`
+CMake target) and is not linked into the portable IoT frame library.
+
+The adapter takes a nonblocking, advisory exclusive `flock` on the directory
+for the lifetime of the store; another cooperative writer cannot open a
+second adapter concurrently. Do not fork with an open adapter, rename the
+directory during use, or allow another process to mutate its files without
+participating in the lock. Files are opened using `openat` and `O_NOFOLLOW`;
+unexpected file types, symlinks, hardlinks, truncation and ownership/permission
+problems fail closed. On close, staged replay bytes are scrubbed.
+
+Each flush writes a complete 64-byte temporary file using exclusive creation,
+fsyncs the file, then atomically renames it over the older slot in the same
+directory and fsyncs the directory. Final publication uses **another**
+whole-record rename, so the host reference does not depend on an atomic
+in-place 8-byte write. Successful `publish_marker` requires that sequence
+to complete; an error after rename may still be an `IN_DOUBT` commit.
+
+`iot_posix_fsync_rename_process_crashes` tests reopening after abrupt
+child-process termination at each of five callback boundaries, plus death
+immediately after successful publication. It also checks the exclusive
+writer lease, unsafe permissions, corrupted published files, symlinks,
+truncated files and shutdown scrubbing.
+
+**Security and durability limitations:** This is a POSIX filesystem reference
+for trusted local Linux host environments, **not proof of actual power-failure
+durability**. Rename visibility, file/directory fsync guarantees, storage
+writeback caches and failures differ by filesystem, mount and hardware.
+Power-cut testing is mandatory before real deployment. Temp files may remain
+after crashes and need separately reviewed cleanup. Provisioning an initial
+trusted record, authenticated peer/epoch binding, hardware anti-rollback,
+cross-process enforcement against noncooperating writers and exactly-once
+external effects are not provided. Do not promote this example to an
+embedded/IoT production security claim solely from passing host CTests.
