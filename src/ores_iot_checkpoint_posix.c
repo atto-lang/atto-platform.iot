@@ -46,31 +46,47 @@ void ores_iot_checkpoint_posix_close(ores_iot_checkpoint_posix *store) {
     for(i=0;i<sizeof(store->staged);++i) s[i]=0;
     memset(store->loaded,0,sizeof store->loaded);
 }
+static void scrub_bytes(volatile unsigned char *p, size_t n) {
+    size_t i;
+    for (i=0; i<n; ++i) p[i]=0;
+}
 static int read_slot(void *context, unsigned slot,
                      uint8_t out[ORES_IOT_CHECKPOINT_BYTES]) {
     ores_iot_checkpoint_posix *store=context;
     struct stat st;
+    uint8_t snapshot[ORES_IOT_CHECKPOINT_BYTES]={0};
     int fd;
     size_t n=0;
-    if (!store || store->dirfd < 0 || store->owner_pid!=(long)getpid() || slot > 1 || !out) return 0;
+    if (!store || store->dirfd < 0 || store->owner_pid!=(long)getpid() ||
+        slot > 1 || !out) return 0;
+    /* Every new read revokes the previous staged snapshot. A failed read
+     * cannot leave stale bytes eligible for flush or marker publication. */
+    store->loaded[slot]=0;
+    scrub_bytes(store->staged[slot],sizeof store->staged[slot]);
     fd=openat(store->dirfd, slot_names[slot], O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
     if (fd < 0) {
         if (errno != ENOENT) return 0;
-        memset(out,0,ORES_IOT_CHECKPOINT_BYTES);
     } else {
         int ok=fstat(fd,&st)==0 && S_ISREG(st.st_mode) &&
                st.st_size==(off_t)ORES_IOT_CHECKPOINT_BYTES &&
                st.st_nlink == 1;
         while(ok && n<ORES_IOT_CHECKPOINT_BYTES) {
-            ssize_t got=read(fd,out+n,ORES_IOT_CHECKPOINT_BYTES-n);
+            ssize_t got=read(fd,snapshot+n,ORES_IOT_CHECKPOINT_BYTES-n);
             if (got<0 && errno==EINTR) continue;
             if (got<=0) { ok=0; break; }
             n+=(size_t)got;
         }
         if(close(fd)!=0) ok=0;
-        if(!ok) return 0;
+        if(!ok) {
+            scrub_bytes(snapshot,sizeof snapshot);
+            return 0;
+        }
     }
-    memcpy(store->staged[slot],out,ORES_IOT_CHECKPOINT_BYTES);
+    /* Publish output and cache only after an entire successful read.
+     * A partial read or failed close leaves the caller's out unchanged. */
+    memcpy(store->staged[slot],snapshot,sizeof snapshot);
+    memcpy(out,snapshot,sizeof snapshot);
+    scrub_bytes(snapshot,sizeof snapshot);
     store->loaded[slot]=1;
     return 1;
 }
