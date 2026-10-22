@@ -10,14 +10,9 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#ifndef O_CLOEXEC
-#define O_CLOEXEC 0
-#endif
-#ifndef O_NOFOLLOW
-#define O_NOFOLLOW 0
-#endif
-#ifndef O_DIRECTORY
-#define O_DIRECTORY 0
+/* Security-sensitive flags must never silently degrade to zero. */
+#if !defined(O_CLOEXEC) || !defined(O_NOFOLLOW) || !defined(O_DIRECTORY)
+#error "Linux checkpoint adapter requires O_CLOEXEC, O_NOFOLLOW, O_DIRECTORY"
 #endif
 
 static const char *const slot_names[2] = {"slot0.ockp", "slot1.ockp"};
