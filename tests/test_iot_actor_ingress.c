@@ -68,7 +68,7 @@ static void init_disk(disk *d) {
     memcpy(d->buffer,d->durable,sizeof d->buffer);
 }
 static ores_iot_checkpoint_value durable_value(disk *d) {
-    ores_iot_checkpoint_value value={{0}};
+    ores_iot_checkpoint_value value={0};
     ores_iot_checkpoint_io io=adapter(d);
     assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&value)==ORES_IOT_STORE_OK);
     return value;
