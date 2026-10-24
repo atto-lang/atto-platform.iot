@@ -218,3 +218,18 @@ anti-rollback, external protection against writers that ignore advisory
 locks, or true power-loss durability. Cleaning known temporary files cannot
 repair a corrupt published checkpoint, nor does it allow recovery from an
 untrusted checkpoint by selecting an older generation.
+
+
+### Authenticated replay-gated actor ingress — experimental
+
+`include/ores_iot_actor_ingress.h` adds a fixed four-slot integration queue
+between authenticated transport input and actor-owned messages. Admission
+checks authentication first, refuses full-queue input before touching replay
+state, stages a private payload copy, durably commits the replay sequence, and
+only then publishes the message for actor dispatch. Downstream actor
+backpressure leaves the queued message intact; successful dispatch requires a
+synchronous owned copy and scrubs the ingress slot.
+
+This is an integration contract, not cryptography, MQTT/CoAP/TLS, or
+exactly-once delivery. A crash after replay checkpoint publication but before
+the actor effect can lose an effect. See [actor ingress contract](docs/ACTOR_INGRESS.md).
