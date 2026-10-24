@@ -53,9 +53,9 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
     ores_iot_ingress_status result;
 
     if(!ingress || !checkpoint_io || !frame || frame_len==0 ||
-       peer_binding==0 || key_epoch==0 || authenticated!=1)
-        return authenticated==0 ? ORES_IOT_INGRESS_UNAUTHENTICATED
-                                : ORES_IOT_INGRESS_INVALID_ARGUMENT;
+       peer_binding==0 || key_epoch==0)
+        return ORES_IOT_INGRESS_INVALID_ARGUMENT;
+    if(authenticated!=1) return ORES_IOT_INGRESS_UNAUTHENTICATED;
     if(ingress->busy) return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count >= ORES_IOT_INGRESS_QUEUE_CAPACITY)
         return ORES_IOT_INGRESS_BACKPRESSURE;
