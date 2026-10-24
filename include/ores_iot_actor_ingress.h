@@ -57,6 +57,8 @@ typedef struct {
  *  5. publish the in-memory queue slot.
  *
  * No actor-visible message is published before durable replay admission.
+ * frame/frame_len must not overlap the ingress object or any of its queue
+ * storage. Such aliasing is rejected before decode or checkpoint I/O.
  * A crash after checkpoint publication but before actor effects can still lose
  * an effect; exactly-once semantics require an idempotent handler/outbox.
  */
