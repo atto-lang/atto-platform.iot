@@ -7,6 +7,17 @@ static void scrub_bytes(void *address, size_t length) {
     for(i=0; i<length; ++i) dst[i]=0;
 }
 
+static int byte_ranges_overlap(const void *a, size_t alen,
+                               const void *b, size_t blen) {
+    const uintptr_t aa=(uintptr_t)a;
+    const uintptr_t bb=(uintptr_t)b;
+    if(alen==0 || blen==0) return 0;
+    /* Fail closed if computing either end address would wrap. */
+    if(alen>(size_t)(UINTPTR_MAX-aa) || blen>(size_t)(UINTPTR_MAX-bb))
+        return 1;
+    return aa < bb+blen && bb < aa+alen;
+}
+
 static ores_iot_ingress_status map_store(ores_iot_store_status status) {
     switch(status) {
         case ORES_IOT_STORE_OK: return ORES_IOT_INGRESS_OK;
@@ -56,6 +67,8 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
        peer_binding==0 || key_epoch==0)
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(authenticated!=1) return ORES_IOT_INGRESS_UNAUTHENTICATED;
+    if(byte_ranges_overlap(frame,frame_len,ingress,sizeof *ingress))
+        return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->busy) return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count >= ORES_IOT_INGRESS_QUEUE_CAPACITY)
         return ORES_IOT_INGRESS_BACKPRESSURE;
