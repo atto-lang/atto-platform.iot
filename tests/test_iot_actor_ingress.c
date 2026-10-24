@@ -211,6 +211,31 @@ static void test_checkpoint_failure_never_publishes_actor_message(void) {
     assert(bytes_zero(&ingress.queue[0],sizeof ingress.queue[0]));
 }
 
+static void test_frame_alias_rejected_before_checkpoint(void) {
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t external[ORES_IOT_MAX_FRAME_BYTES];
+    size_t frame_len;
+    unsigned reads,writes,flushes,publishes;
+
+    init_disk(&d);
+    io=adapter(&d);
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    frame_len=make_frame(UINT64_C(0x1122334455667788),external);
+    assert(frame_len<=sizeof ingress.queue[0].payload);
+    memcpy(ingress.queue[0].payload,external,frame_len);
+    reads=d.reads;writes=d.writes;flushes=d.flushes;publishes=d.publishes;
+
+    assert(ores_iot_actor_ingress_admit(
+               &ingress,&io,PEER,EPOCH,11,1,
+               ingress.queue[0].payload,frame_len)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ores_iot_actor_ingress_count(&ingress)==0);
+    assert(d.reads==reads && d.writes==writes &&
+           d.flushes==flushes && d.publishes==publishes);
+}
+
 static void test_owned_copy_and_scrub_after_dispatch(void) {
     disk d;
     ores_iot_checkpoint_io io;
@@ -243,5 +268,6 @@ int main(void) {
     test_queue_backpressure_precedes_checkpoint();
     test_checkpoint_failure_never_publishes_actor_message();
     test_owned_copy_and_scrub_after_dispatch();
+    test_frame_alias_rejected_before_checkpoint();
     return 0;
 }
