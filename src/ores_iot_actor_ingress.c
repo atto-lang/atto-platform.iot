@@ -117,6 +117,7 @@ ores_iot_ingress_status ores_iot_actor_ingress_dispatch_one(
         ores_iot_actor_ingress *ingress,
         ores_iot_actor_copy_sink sink, void *context) {
     ores_iot_ingress_message *slot;
+    ores_iot_ingress_message snapshot;
     int accepted;
     if(!ingress || !sink || ingress->busy)
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
@@ -124,7 +125,13 @@ ores_iot_ingress_status ores_iot_actor_ingress_dispatch_one(
 
     ingress->busy=1;
     slot=&ingress->queue[ingress->head];
-    accepted=sink(context,slot);
+
+    /* Never lend a sink the live queue slot. A callback that casts away const
+     * must not be able to corrupt a message that remains queued on
+     * backpressure or an invalid return value. */
+    snapshot=*slot;
+    accepted=sink(context,&snapshot);
+    scrub_bytes(&snapshot,sizeof snapshot);
     if(accepted!=0 && accepted!=1) {
         ingress->busy=0;
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
