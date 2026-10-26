@@ -90,6 +90,7 @@ static int bytes_zero(const void *ptr,size_t len) {
 
 typedef struct {
     int accept;
+    int mutate_borrow;
     unsigned calls;
     ores_iot_ingress_message copied;
 } actor_sink;
@@ -97,6 +98,11 @@ typedef struct {
 static int actor_copy(void *context,const ores_iot_ingress_message *message) {
     actor_sink *sink=(actor_sink*)context;
     sink->calls++;
+    if(sink->mutate_borrow) {
+        ores_iot_ingress_message *bad=(ores_iot_ingress_message*)(void*)message;
+        memset(bad,0,sizeof *bad);
+        bad->sequence=UINT64_MAX;
+    }
     if(!sink->accept) return 0;
     sink->copied=*message;
     return 1;
@@ -171,12 +177,14 @@ static void test_queue_backpressure_precedes_checkpoint(void) {
 
     memset(&sink,0,sizeof sink);
     sink.accept=0;
+    sink.mutate_borrow=1;
     assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
            ==ORES_IOT_INGRESS_BACKPRESSURE);
     assert(sink.calls==1);
     assert(ores_iot_actor_ingress_count(&ingress)==ORES_IOT_INGRESS_QUEUE_CAPACITY);
 
     sink.accept=1;
+    sink.mutate_borrow=0;
     assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
            ==ORES_IOT_INGRESS_OK);
     assert(ores_iot_actor_ingress_count(&ingress)==ORES_IOT_INGRESS_QUEUE_CAPACITY-1u);
