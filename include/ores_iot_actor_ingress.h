@@ -72,8 +72,10 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
 
 /* Sink contract: return 1 only after synchronously copying the message into
  * actor-owned storage. Return 0 for actor-mailbox backpressure. The pointer is
- * borrowed only for the callback and must never be retained. The callback must
- * not re-enter this ingress object. On 0 the message remains queued unchanged. */
+ * a private dispatch snapshot, borrowed only for the callback and scrubbed on
+ * return; it must never be retained. Cast-away-const writes affect only that
+ * snapshot and cannot corrupt the live queued message. The callback must not
+ * re-enter this ingress object. On 0 the message remains queued unchanged. */
 typedef int (*ores_iot_actor_copy_sink)(
     void *context, const ores_iot_ingress_message *message);
 
