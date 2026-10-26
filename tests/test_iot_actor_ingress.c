@@ -286,11 +286,68 @@ static void test_owned_copy_and_scrub_after_dispatch(void) {
            ==ORES_IOT_INGRESS_EMPTY);
 }
 
+
+static uint64_t payload_u64(const ores_iot_ingress_message *message) {
+    uint64_t value=0;
+    size_t i;
+    assert(message && message->length==8);
+    for(i=0;i<8;++i) value|=((uint64_t)message->payload[i])<<(i*8u);
+    return value;
+}
+
+static void test_dispatch_snapshot_adversarial_stress(void) {
+    enum { ROUNDS=256 };
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES];
+    actor_sink sink;
+    unsigned i;
+
+    init_disk(&d);
+    io=adapter(&d);
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    memset(&sink,0,sizeof sink);
+
+    for(i=0;i<ROUNDS;++i) {
+        const uint64_t sequence=UINT64_C(11)+(uint64_t)i;
+        const uint64_t payload=UINT64_C(0xa500000000000000)^sequence;
+        const size_t frame_len=make_frame(payload,frame);
+
+        assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,sequence,1,
+                                            frame,frame_len)
+               ==ORES_IOT_INGRESS_OK);
+        assert(ores_iot_actor_ingress_count(&ingress)==1);
+
+        sink.accept=0;
+        sink.mutate_borrow=1;
+        assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
+               ==ORES_IOT_INGRESS_BACKPRESSURE);
+        assert(ores_iot_actor_ingress_count(&ingress)==1);
+
+        assert(ores_iot_actor_ingress_dispatch_one(
+                   &ingress,invalid_mutating_copy,&sink)
+               ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+        assert(ores_iot_actor_ingress_count(&ingress)==1);
+
+        sink.accept=1;
+        sink.mutate_borrow=0;
+        assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
+               ==ORES_IOT_INGRESS_OK);
+        assert(sink.copied.sequence==sequence);
+        assert(sink.copied.peer_binding==PEER && sink.copied.key_epoch==EPOCH);
+        assert(sink.copied.kind==ORES_IOT_COMMAND);
+        assert(payload_u64(&sink.copied)==payload);
+        assert(ores_iot_actor_ingress_count(&ingress)==0);
+    }
+}
+
 int main(void) {
     test_auth_frame_and_duplicate_gates();
     test_queue_backpressure_precedes_checkpoint();
     test_checkpoint_failure_never_publishes_actor_message();
     test_owned_copy_and_scrub_after_dispatch();
     test_frame_alias_rejected_before_checkpoint();
+    test_dispatch_snapshot_adversarial_stress();
     return 0;
 }
