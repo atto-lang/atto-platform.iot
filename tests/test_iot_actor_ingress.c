@@ -342,6 +342,53 @@ static void test_dispatch_snapshot_adversarial_stress(void) {
     }
 }
 
+static void test_corrupt_ring_metadata_fails_closed(void) {
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES];
+    size_t frame_len;
+    unsigned reads,writes,flushes,publishes;
+    actor_sink sink;
+
+    init_disk(&d);
+    io=adapter(&d);
+    frame_len=make_frame(444,frame);
+    memset(&sink,0,sizeof sink);
+    sink.accept=1;
+
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    ingress.tail=ORES_IOT_INGRESS_QUEUE_CAPACITY;
+    reads=d.reads; writes=d.writes; flushes=d.flushes; publishes=d.publishes;
+    assert(ores_iot_actor_ingress_count(&ingress)==0);
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,11,1,
+                                        frame,frame_len)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(d.reads==reads && d.writes==writes &&
+           d.flushes==flushes && d.publishes==publishes);
+
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    ingress.head=1;
+    assert(ores_iot_actor_ingress_count(&ingress)==0);
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,11,1,
+                                        frame,frame_len)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    ingress.count=ORES_IOT_INGRESS_QUEUE_CAPACITY+1u;
+    assert(ores_iot_actor_ingress_count(&ingress)==0);
+    assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    ingress.busy=2;
+    assert(ores_iot_actor_ingress_count(&ingress)==0);
+    assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+}
+
 int main(void) {
     test_auth_frame_and_duplicate_gates();
     test_queue_backpressure_precedes_checkpoint();
@@ -349,5 +396,6 @@ int main(void) {
     test_owned_copy_and_scrub_after_dispatch();
     test_frame_alias_rejected_before_checkpoint();
     test_dispatch_snapshot_adversarial_stress();
+    test_corrupt_ring_metadata_fails_closed();
     return 0;
 }
