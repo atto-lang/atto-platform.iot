@@ -108,6 +108,16 @@ static int actor_copy(void *context,const ores_iot_ingress_message *message) {
     return 1;
 }
 
+static int invalid_mutating_copy(void *context,
+                                 const ores_iot_ingress_message *message) {
+    actor_sink *sink=(actor_sink*)context;
+    ores_iot_ingress_message *bad=(ores_iot_ingress_message*)(void*)message;
+    sink->calls++;
+    memset(bad,0,sizeof *bad);
+    bad->sequence=UINT64_MAX;
+    return 2;
+}
+
 static void test_auth_frame_and_duplicate_gates(void) {
     disk d;
     ores_iot_checkpoint_io io;
@@ -181,6 +191,11 @@ static void test_queue_backpressure_precedes_checkpoint(void) {
     assert(ores_iot_actor_ingress_dispatch_one(&ingress,actor_copy,&sink)
            ==ORES_IOT_INGRESS_BACKPRESSURE);
     assert(sink.calls==1);
+    assert(ores_iot_actor_ingress_count(&ingress)==ORES_IOT_INGRESS_QUEUE_CAPACITY);
+
+    assert(ores_iot_actor_ingress_dispatch_one(&ingress,invalid_mutating_copy,&sink)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(sink.calls==2);
     assert(ores_iot_actor_ingress_count(&ingress)==ORES_IOT_INGRESS_QUEUE_CAPACITY);
 
     sink.accept=1;
