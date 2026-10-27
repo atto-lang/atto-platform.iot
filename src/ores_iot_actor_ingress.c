@@ -18,6 +18,19 @@ static int byte_ranges_overlap(const void *a, size_t alen,
     return aa < bb+blen && bb < aa+alen;
 }
 
+static int valid_ingress_state(const ores_iot_actor_ingress *ingress) {
+    unsigned expected_tail;
+    if(!ingress ||
+       ingress->head>=ORES_IOT_INGRESS_QUEUE_CAPACITY ||
+       ingress->tail>=ORES_IOT_INGRESS_QUEUE_CAPACITY ||
+       ingress->count>ORES_IOT_INGRESS_QUEUE_CAPACITY ||
+       ingress->busy>1u)
+        return 0;
+    expected_tail=((unsigned)ingress->head+(unsigned)ingress->count)%
+                  ORES_IOT_INGRESS_QUEUE_CAPACITY;
+    return ingress->tail==(uint8_t)expected_tail;
+}
+
 static ores_iot_ingress_status map_store(ores_iot_store_status status) {
     switch(status) {
         case ORES_IOT_STORE_OK: return ORES_IOT_INGRESS_OK;
@@ -48,7 +61,7 @@ ores_iot_ingress_status ores_iot_actor_ingress_init(
 }
 
 size_t ores_iot_actor_ingress_count(const ores_iot_actor_ingress *ingress) {
-    if(!ingress || ingress->busy) return 0;
+    if(!valid_ingress_state(ingress) || ingress->busy) return 0;
     return ingress->count;
 }
 
@@ -69,7 +82,8 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
     if(authenticated!=1) return ORES_IOT_INGRESS_UNAUTHENTICATED;
     if(byte_ranges_overlap(frame,frame_len,ingress,sizeof *ingress))
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
-    if(ingress->busy) return ORES_IOT_INGRESS_INVALID_ARGUMENT;
+    if(!valid_ingress_state(ingress) || ingress->busy)
+        return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count >= ORES_IOT_INGRESS_QUEUE_CAPACITY)
         return ORES_IOT_INGRESS_BACKPRESSURE;
 
@@ -117,14 +131,21 @@ ores_iot_ingress_status ores_iot_actor_ingress_dispatch_one(
         ores_iot_actor_ingress *ingress,
         ores_iot_actor_copy_sink sink, void *context) {
     ores_iot_ingress_message *slot;
+    ores_iot_ingress_message snapshot;
     int accepted;
-    if(!ingress || !sink || ingress->busy)
+    if(!ingress || !sink || !valid_ingress_state(ingress) || ingress->busy)
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count==0) return ORES_IOT_INGRESS_EMPTY;
 
     ingress->busy=1;
     slot=&ingress->queue[ingress->head];
-    accepted=sink(context,slot);
+
+    /* Never lend a sink the live queue slot. A callback that casts away const
+     * must not be able to corrupt a message that remains queued on
+     * backpressure or an invalid return value. */
+    snapshot=*slot;
+    accepted=sink(context,&snapshot);
+    scrub_bytes(&snapshot,sizeof snapshot);
     if(accepted!=0 && accepted!=1) {
         ingress->busy=0;
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;

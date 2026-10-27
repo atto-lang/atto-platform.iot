@@ -17,6 +17,23 @@ static int overlaps_region(const void *left, size_t left_len,
     return a >= b ? a - b < right_len : b - a < left_len;
 }
 
+static int valid_stream_state(const ores_iot_stream *stream) {
+    if(stream==NULL ||
+       stream->used>ORES_IOT_MAX_FRAME_BYTES ||
+       stream->expected>ORES_IOT_MAX_FRAME_BYTES ||
+       stream->busy>1u || stream->failed>1u)
+        return 0;
+    if(stream->failed)
+        return stream->used==0 && stream->expected==0;
+    if(stream->expected==0)
+        return stream->used<ORES_IOT_HEADER_BYTES;
+    if(stream->expected<ORES_IOT_HEADER_BYTES ||
+       stream->used<ORES_IOT_HEADER_BYTES ||
+       stream->used>stream->expected)
+        return 0;
+    return 1;
+}
+
 static ores_iot_status inspect_header(const uint8_t *p, size_t *expected) {
     size_t length;
     if (p[0] != 'O' || p[1] != 'R' || p[2] != 'E' || p[3] != 'S')
@@ -57,7 +74,8 @@ ores_iot_status ores_iot_stream_feed(
         return ORES_IOT_INVALID_ARGUMENT;
     if (overlaps_region(stream, sizeof(*stream), chunk, chunk_len))
         return ORES_IOT_INVALID_ARGUMENT;
-    if (stream->busy) return ORES_IOT_INVALID_ARGUMENT;
+    if (!valid_stream_state(stream) || stream->busy)
+        return ORES_IOT_INVALID_ARGUMENT;
     if (stream->failed) return ORES_IOT_CLOSED;
     if (chunk_len > ORES_IOT_MAX_FEED_BYTES) return ORES_IOT_TOO_LARGE;
     stream->busy = 1;
@@ -104,7 +122,8 @@ ores_iot_status ores_iot_stream_feed(
 
 ores_iot_status ores_iot_stream_finish(ores_iot_stream *stream) {
     ores_iot_status status;
-    if (stream == NULL || stream->busy) return ORES_IOT_INVALID_ARGUMENT;
+    if (!valid_stream_state(stream) || stream->busy)
+        return ORES_IOT_INVALID_ARGUMENT;
     if (stream->failed) return ORES_IOT_CLOSED;
     status = stream->used == 0 && stream->expected == 0 ? ORES_IOT_OK : ORES_IOT_MALFORMED;
     scrub_buffer(stream);

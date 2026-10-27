@@ -73,8 +73,58 @@ static void test_scrub_and_status(void) {
         }
     }
 }
+static void test_corrupt_stream_state_fails_closed(void) {
+    ores_iot_stream stream;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES]={0};
+    size_t delivered=99;
+    stats s={0,0};
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.used=ORES_IOT_MAX_FRAME_BYTES+1u;
+    assert(ores_iot_stream_feed(&stream,NULL,0,callback,&s,&delivered)
+           ==ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered==0);
+    assert(ores_iot_stream_finish(&stream)==ORES_IOT_INVALID_ARGUMENT);
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.expected=ORES_IOT_MAX_FRAME_BYTES+1u;
+    delivered=99;
+    assert(ores_iot_stream_feed(&stream,NULL,0,callback,&s,&delivered)
+           ==ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered==0);
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.used=ORES_IOT_HEADER_BYTES+1u;
+    stream.expected=0;
+    delivered=99;
+    assert(ores_iot_stream_feed(&stream,NULL,0,callback,&s,&delivered)
+           ==ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered==0);
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.used=ORES_IOT_HEADER_BYTES;
+    stream.expected=ORES_IOT_HEADER_BYTES-1u;
+    delivered=99;
+    assert(ores_iot_stream_feed(&stream,NULL,0,callback,&s,&delivered)
+           ==ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered==0);
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.failed=1;
+    stream.used=1;
+    assert(ores_iot_stream_finish(&stream)==ORES_IOT_INVALID_ARGUMENT);
+
+    assert(ores_iot_stream_init(&stream)==ORES_IOT_OK);
+    stream.busy=2;
+    delivered=99;
+    assert(ores_iot_stream_feed(&stream,frame,0,callback,&s,&delivered)
+           ==ORES_IOT_INVALID_ARGUMENT);
+    assert(delivered==0);
+}
+
 int main(void) {
     test_scrub_and_status();
+    test_corrupt_stream_state_fails_closed();
     ores_iot_stream stream;
     uint8_t frame[ORES_IOT_MAX_FRAME_BYTES], pair[2 * ORES_IOT_MAX_FRAME_BYTES];
     const uint8_t data[] = {7u, 8u};
