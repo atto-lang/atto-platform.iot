@@ -196,6 +196,17 @@ int main(void) {
     ores_iot_checkpoint_posix_close(&store);
     snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
     assert(unlink(file)==0);
+    /* A non-regular FIFO must fail without blocking in openat. A blocking
+     * regression is terminated by SIGALRM instead of hanging CI forever. */
+    snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
+    assert(mkfifo(file,0600)==0);
+    assert(ores_iot_checkpoint_posix_open(&store,pattern));
+    io=ores_iot_checkpoint_posix_adapter(&store);
+    alarm(2);
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_IO_ERROR);
+    alarm(0);
+    ores_iot_checkpoint_posix_close(&store);
+    assert(unlink(file)==0);
     /* Existing symlinks and truncated slot files fail closed. */
     assert(symlink("/etc/passwd",file)==0);
     assert(ores_iot_checkpoint_posix_open(&store,pattern));
