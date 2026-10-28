@@ -12,8 +12,8 @@
 #include <unistd.h>
 
 /* Security-sensitive flags must never silently degrade to zero. */
-#if !defined(O_CLOEXEC) || !defined(O_NOFOLLOW) || !defined(O_DIRECTORY)
-#error "Linux checkpoint adapter requires O_CLOEXEC, O_NOFOLLOW, O_DIRECTORY"
+#if !defined(O_CLOEXEC) || !defined(O_NOFOLLOW) || !defined(O_DIRECTORY) || !defined(O_NONBLOCK)
+#error "Linux checkpoint adapter requires O_CLOEXEC, O_NOFOLLOW, O_DIRECTORY, O_NONBLOCK"
 #endif
 
 static const char *const slot_names[2] = {"slot0.ockp", "slot1.ockp"};
@@ -65,7 +65,9 @@ static int read_slot(void *context, unsigned slot,
      * cannot leave stale bytes eligible for flush or marker publication. */
     store->loaded[slot]=0;
     scrub_bytes(store->staged[slot],sizeof store->staged[slot]);
-    fd=openat(store->dirfd, slot_names[slot], O_RDONLY|O_NOFOLLOW|O_CLOEXEC);
+    /* A same-UID attacker or corrupt slot may be a FIFO. O_NOFOLLOW alone
+     * does not prevent a blocking open before fstat can reject non-files. */
+    fd=openat(store->dirfd, slot_names[slot], O_RDONLY|O_NOFOLLOW|O_CLOEXEC|O_NONBLOCK);
     if (fd < 0) {
         if (errno != ENOENT) return 0;
     } else {
