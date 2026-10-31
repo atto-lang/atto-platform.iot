@@ -98,10 +98,20 @@ static int read_slot(void *context, unsigned slot,
 static int write_bytes(void *context,unsigned slot,size_t offset,
                        const uint8_t *bytes,size_t length) {
     ores_iot_checkpoint_posix *store=context;
+    static const uint8_t unpublished[ORES_IOT_CHECKPOINT_MARKER_BYTES]={0};
     if (!store || store->dirfd<0 || store->owner_pid!=(long)getpid() ||
         slot>1 || !store->loaded[slot] ||
         !bytes || offset>ORES_IOT_CHECKPOINT_BYTES ||
         length>ORES_IOT_CHECKPOINT_BYTES-offset) return 0;
+    /* The final publication marker has a single writer: publish_marker.
+     * Ordinary staged writes must not be able to forge a published record
+     * or cross the marker boundary. Allow only a complete zero invalidation
+     * of that field, as required by the ordered commit protocol. */
+    if (offset>=ORES_IOT_CHECKPOINT_MARKER_OFFSET) {
+        if (offset!=ORES_IOT_CHECKPOINT_MARKER_OFFSET ||
+            length!=ORES_IOT_CHECKPOINT_MARKER_BYTES ||
+            memcmp(bytes,unpublished,sizeof unpublished)!=0) return 0;
+    } else if (length>ORES_IOT_CHECKPOINT_MARKER_OFFSET-offset) return 0;
     memcpy(store->staged[slot]+offset,bytes,length);
     return 1;
 }
@@ -154,10 +164,15 @@ static int flush_slot(void *context,unsigned slot) {
 }
 static int publish_marker(void *context,unsigned slot,const uint8_t marker[8]) {
     ores_iot_checkpoint_posix *store=context;
-    static const uint8_t unpublished[8]={0};
+    static const uint8_t unpublished[ORES_IOT_CHECKPOINT_MARKER_BYTES]={0};
+    static const uint8_t valid_marker[ORES_IOT_CHECKPOINT_MARKER_BYTES]={
+        'O','R','E','C','O','M','0','1'
+    };
     if(!store || store->dirfd<0 || store->owner_pid!=(long)getpid() ||
        slot>1 || !store->loaded[slot] || !marker ||
-       memcmp(store->staged[slot]+56,unpublished,8)!=0) return 0;
+       memcmp(marker,valid_marker,sizeof valid_marker)!=0 ||
+       memcmp(store->staged[slot]+ORES_IOT_CHECKPOINT_MARKER_OFFSET,
+              unpublished,sizeof unpublished)!=0) return 0;
     memcpy(store->staged[slot]+56,marker,8);
     return persist(store,slot);
 }
