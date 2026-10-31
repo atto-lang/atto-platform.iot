@@ -22,9 +22,11 @@ typedef struct {
  * scrubs the prior staged slot first; failed reads cannot be flushed or
  * committed using cached bytes. A missing slot reads as 64 zero bytes.
  * write_bytes cannot publish arbitrary or partial final-marker bytes:
- * it accepts ordinary writes only in 0..55, plus exactly eight zero bytes
- * at offset 56 for durable invalidation. publish_marker accepts only the
- * canonical ORECOM01 marker. These host-adapter constraints do NOT validate
+ * it accepts ordinary writes only in 0..55 while the staged marker is zero,
+ * plus exactly eight zero bytes at offset 56 for invalidation. Previously
+ * published slots must first be invalidated before any staged data mutation.
+ * publish_marker accepts only the canonical ORECOM01 marker. These host
+ * adapter constraints do NOT validate
  * caller authorization, prove real power-cut atomicity, or prevent rollback. */
 int ores_iot_checkpoint_posix_open(ores_iot_checkpoint_posix *store,
                                    const char *trusted_directory);
