@@ -111,7 +111,14 @@ static int write_bytes(void *context,unsigned slot,size_t offset,
         if (offset!=ORES_IOT_CHECKPOINT_MARKER_OFFSET ||
             length!=ORES_IOT_CHECKPOINT_MARKER_BYTES ||
             memcmp(bytes,unpublished,sizeof unpublished)!=0) return 0;
-    } else if (length>ORES_IOT_CHECKPOINT_MARKER_OFFSET-offset) return 0;
+    } else {
+        if (length>ORES_IOT_CHECKPOINT_MARKER_OFFSET-offset) return 0;
+        /* A previously published slot must first be invalidated. Without
+         * this guard a direct payload write and flush could persist changed
+         * bytes under the OLD publication marker, outside commit_sequence. */
+        if (memcmp(store->staged[slot]+ORES_IOT_CHECKPOINT_MARKER_OFFSET,
+                   unpublished,sizeof unpublished)!=0) return 0;
+    }
     memcpy(store->staged[slot]+offset,bytes,length);
     return 1;
 }
