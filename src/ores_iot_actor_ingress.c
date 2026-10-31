@@ -132,11 +132,15 @@ ores_iot_ingress_status ores_iot_actor_ingress_dispatch_one(
         ores_iot_actor_copy_sink sink, void *context) {
     ores_iot_ingress_message *slot;
     ores_iot_ingress_message snapshot;
+    uint8_t head_before, tail_before, count_before;
     int accepted;
     if(!ingress || !sink || !valid_ingress_state(ingress) || ingress->busy)
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count==0) return ORES_IOT_INGRESS_EMPTY;
 
+    head_before=ingress->head;
+    tail_before=ingress->tail;
+    count_before=ingress->count;
     ingress->busy=1;
     slot=&ingress->queue[ingress->head];
 
@@ -146,6 +150,15 @@ ores_iot_ingress_status ores_iot_actor_ingress_dispatch_one(
     snapshot=*slot;
     accepted=sink(context,&snapshot);
     scrub_bytes(&snapshot,sizeof snapshot);
+    /* The sink contract forbids re-entry, but a buggy callback may reset or
+     * mutate the ingress while it is borrowed. Never decrement a changed
+     * count (underflow after reset), scrub a replaced slot, or report success
+     * based on metadata invalidated by the callback. Do not try to repair a
+     * queue a foreign callback has mutated. */
+    if(ingress->busy!=1u || !valid_ingress_state(ingress) ||
+       ingress->head!=head_before || ingress->tail!=tail_before ||
+       ingress->count!=count_before)
+        return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(accepted!=0 && accepted!=1) {
         ingress->busy=0;
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
