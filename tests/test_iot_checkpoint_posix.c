@@ -143,6 +143,25 @@ int main(void) {
     }
     io=ores_iot_checkpoint_posix_adapter(&store);
     assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_EMPTY);
+    /* The storage adapter must never allow a direct staged marker write
+     * to bypass final publication. Rejected writes do not alter staging. */
+    {
+        static const uint8_t unpublished[8]={0};
+        static const uint8_t marker[8]={'O','R','E','C','O','M','0','1'};
+        static const uint8_t wrong[8]={'B','A','D','C','O','M','0','1'};
+        uint8_t crossing[2]={0xab,0xcd};
+        size_t i;
+        assert(!io.write_bytes(io.context,0,56,marker,sizeof marker));
+        assert(!io.write_bytes(io.context,0,57,unpublished,1));
+        assert(!io.write_bytes(io.context,0,55,crossing,sizeof crossing));
+        assert(!io.publish_marker(io.context,0,wrong));
+        for(i=0;i<sizeof store.staged[0];++i)
+            assert(store.staged[0][i]==0);
+        /* A complete zero-marker invalidation remains legal. */
+        assert(io.write_bytes(io.context,0,56,unpublished,sizeof unpublished));
+        for(i=0;i<sizeof store.staged[0];++i)
+            assert(store.staged[0][i]==0);
+    }
     ores_iot_checkpoint_posix_close(&store);
     /* Crash leftovers are cleaned after acquiring the exclusive lease. */
     {
