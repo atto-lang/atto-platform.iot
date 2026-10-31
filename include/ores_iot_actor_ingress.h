@@ -75,7 +75,13 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
  * a private dispatch snapshot, borrowed only for the callback and scrubbed on
  * return; it must never be retained. Cast-away-const writes affect only that
  * snapshot and cannot corrupt the live queued message. The callback must not
- * re-enter this ingress object. On 0 the message remains queued unchanged. */
+ * re-enter this ingress object. The implementation checks that busy,
+ * head, tail and count remain unchanged while the callback runs, rejecting
+ * any detected violation rather than consuming the wrong slot or underflowing
+ * a reset count. This is a fail-closed guard, not a sandbox: a callback with a
+ * mutable pointer to the ingress can still erase or rewrite queued payloads,
+ * and cannot safely be trusted to participate in an at-most-once protocol.
+ * On a well-behaved callback returning 0, the message remains queued. */
 typedef int (*ores_iot_actor_copy_sink)(
     void *context, const ores_iot_ingress_message *message);
 
