@@ -389,6 +389,58 @@ static void test_corrupt_ring_metadata_fails_closed(void) {
            ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
 }
 
+/* External callbacks must not reset or rewrite an ingress while borrowed.
+ * Violation must be rejected without decrementing a reset count to UINT8_MAX,
+ * or reporting the callback as a successfully consumed queued message. */
+static int reset_ingress_in_sink(void *context,
+                                 const ores_iot_ingress_message *message) {
+    ores_iot_actor_ingress *ingress=(ores_iot_actor_ingress *)context;
+    (void)message;
+    assert(ingress->busy==1u);
+    assert(ores_iot_actor_ingress_init(ingress)==ORES_IOT_INGRESS_OK);
+    return 1;
+}
+
+static int rewrite_ring_in_sink(void *context,
+                                const ores_iot_ingress_message *message) {
+    ores_iot_actor_ingress *ingress=(ores_iot_actor_ingress *)context;
+    (void)message;
+    assert(ingress->busy==1u && ingress->count==1u);
+    /* A forged but internally consistent queue view is still unauthorized. */
+    ingress->head=1u;
+    ingress->tail=2u;
+    return 0;
+}
+
+static void test_sink_mutation_cannot_underflow_or_claim_success(void) {
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES];
+    size_t frame_len=make_frame(555,frame);
+
+    init_disk(&d);
+    io=adapter(&d);
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,11,1,
+                                       frame,frame_len)==ORES_IOT_INGRESS_OK);
+    assert(ores_iot_actor_ingress_count(&ingress)==1u);
+    assert(ores_iot_actor_ingress_dispatch_one(
+                &ingress,reset_ingress_in_sink,&ingress)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ingress.count==0u && ingress.head==0u && ingress.tail==0u);
+    assert(ores_iot_actor_ingress_count(&ingress)==0u);
+
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,12,1,
+                                       frame,frame_len)==ORES_IOT_INGRESS_OK);
+    assert(ores_iot_actor_ingress_count(&ingress)==1u);
+    assert(ores_iot_actor_ingress_dispatch_one(
+                &ingress,rewrite_ring_in_sink,&ingress)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ingress.count==1u);
+    assert(ingress.head==1u && ingress.tail==2u);
+}
+
 int main(void) {
     test_auth_frame_and_duplicate_gates();
     test_queue_backpressure_precedes_checkpoint();
@@ -397,5 +449,6 @@ int main(void) {
     test_frame_alias_rejected_before_checkpoint();
     test_dispatch_snapshot_adversarial_stress();
     test_corrupt_ring_metadata_fails_closed();
+    test_sink_mutation_cannot_underflow_or_claim_success();
     return 0;
 }
