@@ -441,6 +441,73 @@ static void test_sink_mutation_cannot_underflow_or_claim_success(void) {
     assert(ingress.head==1u && ingress.tail==2u);
 }
 
+
+typedef struct {
+    ores_iot_actor_ingress *ingress;
+    ores_iot_checkpoint_io *io;
+    const uint8_t *frame;
+    size_t length;
+    unsigned calls;
+} reentrant_sink_state;
+
+/* A user actor callback must never re-enter the same ingress session.
+ * Neither nested operation may perform checkpoint I/O or queue mutation. */
+static int attempt_reentrant_ingress(void *context,
+                                    const ores_iot_ingress_message *message) {
+    reentrant_sink_state *state=(reentrant_sink_state*)context;
+    (void)message;
+    state->calls++;
+    assert(ores_iot_actor_ingress_dispatch_one(state->ingress,
+                                                actor_copy,NULL)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ores_iot_actor_ingress_admit(state->ingress,state->io,PEER,EPOCH,12,1,
+                                        state->frame,state->length)
+           ==ORES_IOT_INGRESS_INVALID_ARGUMENT);
+    assert(ores_iot_actor_ingress_count(state->ingress)==0u);
+    return 1;
+}
+static void test_reentrant_callbacks_fail_closed_without_extra_checkpoint(void) {
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES];
+    const size_t length=make_frame(661,frame);
+    unsigned reads,writes,flushes,publishes;
+    reentrant_sink_state sink;
+
+    init_disk(&d);
+    io=adapter(&d);
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,11,1,
+                                        frame,length)==ORES_IOT_INGRESS_OK);
+    reads=d.reads; writes=d.writes; flushes=d.flushes; publishes=d.publishes;
+    sink=(reentrant_sink_state){&ingress,&io,frame,length,0u};
+    assert(ores_iot_actor_ingress_dispatch_one(&ingress,
+               attempt_reentrant_ingress,&sink)==ORES_IOT_INGRESS_OK);
+    assert(sink.calls==1u);
+    assert(d.reads==reads && d.writes==writes &&
+           d.flushes==flushes && d.publishes==publishes);
+    assert(ores_iot_actor_ingress_count(&ingress)==0u);
+    assert(bytes_zero(&ingress.queue[0],sizeof ingress.queue[0]));
+}
+static void test_noncanonical_authenticated_flag_rejected_pre_io(void) {
+    disk d;
+    ores_iot_checkpoint_io io;
+    ores_iot_actor_ingress ingress;
+    uint8_t frame[ORES_IOT_MAX_FRAME_BYTES];
+    const size_t length=make_frame(662,frame);
+    unsigned reads,writes;
+    init_disk(&d);
+    io=adapter(&d);
+    assert(ores_iot_actor_ingress_init(&ingress)==ORES_IOT_INGRESS_OK);
+    reads=d.reads;writes=d.writes;
+    assert(ores_iot_actor_ingress_admit(&ingress,&io,PEER,EPOCH,11,2,
+                                        frame,length)
+           ==ORES_IOT_INGRESS_UNAUTHENTICATED);
+    assert(d.reads==reads && d.writes==writes);
+    assert(ores_iot_actor_ingress_count(&ingress)==0u);
+}
+
 int main(void) {
     test_auth_frame_and_duplicate_gates();
     test_queue_backpressure_precedes_checkpoint();
@@ -450,5 +517,7 @@ int main(void) {
     test_dispatch_snapshot_adversarial_stress();
     test_corrupt_ring_metadata_fails_closed();
     test_sink_mutation_cannot_underflow_or_claim_success();
+    test_reentrant_callbacks_fail_closed_without_extra_checkpoint();
+    test_noncanonical_authenticated_flag_rejected_pre_io();
     return 0;
 }
