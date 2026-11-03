@@ -143,6 +143,25 @@ int main(void) {
     }
     io=ores_iot_checkpoint_posix_adapter(&store);
     assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_EMPTY);
+    /* The storage adapter must never allow a direct staged marker write
+     * to bypass final publication. Rejected writes do not alter staging. */
+    {
+        static const uint8_t unpublished[8]={0};
+        static const uint8_t marker[8]={'O','R','E','C','O','M','0','1'};
+        static const uint8_t wrong[8]={'B','A','D','C','O','M','0','1'};
+        uint8_t crossing[2]={0xab,0xcd};
+        size_t i;
+        assert(!io.write_bytes(io.context,0,56,marker,sizeof marker));
+        assert(!io.write_bytes(io.context,0,57,unpublished,1));
+        assert(!io.write_bytes(io.context,0,55,crossing,sizeof crossing));
+        assert(!io.publish_marker(io.context,0,wrong));
+        for(i=0;i<sizeof store.staged[0];++i)
+            assert(store.staged[0][i]==0);
+        /* A complete zero-marker invalidation remains legal. */
+        assert(io.write_bytes(io.context,0,56,unpublished,sizeof unpublished));
+        for(i=0;i<sizeof store.staged[0];++i)
+            assert(store.staged[0][i]==0);
+    }
     ores_iot_checkpoint_posix_close(&store);
     /* Crash leftovers are cleaned after acquiring the exclusive lease. */
     {
@@ -176,6 +195,27 @@ int main(void) {
     assert(ores_iot_checkpoint_posix_open(&store,pattern));
     io=ores_iot_checkpoint_posix_adapter(&store);
     check(&io,7,16);
+    /* Direct payload mutation of a published slot cannot persist under
+     * its old commit marker. The authorized commit path first invalidates
+     * the eight-byte marker, which enables staged payload writes again. */
+    {
+        static const uint8_t published[8]={'O','R','E','C','O','M','0','1'};
+        static const uint8_t unpublished[8]={0};
+        uint8_t snapshot[64], changed=0x5a;
+        unsigned slot, published_count=0;
+        for(slot=0;slot<2;++slot) {
+            assert(io.read_slot(io.context,slot,snapshot));
+            if(memcmp(snapshot+56,published,8)!=0) continue;
+            ++published_count;
+            assert(!io.write_bytes(io.context,slot,0,&changed,1));
+            assert(memcmp(store.staged[slot],snapshot,sizeof snapshot)==0);
+            assert(io.write_bytes(io.context,slot,56,unpublished,sizeof unpublished));
+            assert(io.write_bytes(io.context,slot,0,&changed,1));
+        }
+        assert(published_count>0);
+    }
+    /* Nothing above is flushed; durable records must still recover. */
+    check(&io,7,16);
     ores_iot_checkpoint_posix_close(&store);
     /* Valid-length but nonprivate slot files are not trusted. */
     snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
@@ -195,6 +235,17 @@ int main(void) {
     assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_UNTRUSTED);
     ores_iot_checkpoint_posix_close(&store);
     snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
+    assert(unlink(file)==0);
+    /* A non-regular FIFO must fail without blocking in openat. A blocking
+     * regression is terminated by SIGALRM instead of hanging CI forever. */
+    snprintf(file,sizeof file,"%s/slot0.ockp",pattern);
+    assert(mkfifo(file,0600)==0);
+    assert(ores_iot_checkpoint_posix_open(&store,pattern));
+    io=ores_iot_checkpoint_posix_adapter(&store);
+    alarm(2);
+    assert(ores_iot_checkpoint_load(&io,PEER,EPOCH,&val)==ORES_IOT_STORE_IO_ERROR);
+    alarm(0);
+    ores_iot_checkpoint_posix_close(&store);
     assert(unlink(file)==0);
     /* Existing symlinks and truncated slot files fail closed. */
     assert(symlink("/etc/passwd",file)==0);
