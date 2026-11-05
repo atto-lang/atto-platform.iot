@@ -343,5 +343,42 @@ class RawCheckoutPreflightTests(unittest.TestCase):
         self.assertNotEqual(self.run_checker().returncode, 0)
 
 
+
+
+class IoTWave22PortablePathBoundaries(unittest.TestCase):
+    """IoT source-index path containment and portable filename checks."""
+    setUp = RawCheckoutPreflightTests.setUp
+    run_checker = RawCheckoutPreflightTests.run_checker
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "requires POSIX filenames")
+    def test_nested_console_device_name_is_rejected(self):
+        directory = self.root / "ingress"
+        directory.mkdir()
+        (directory / "CONIN$.txt").write_text("device")
+        git(self.root, "add", "ingress/CONIN$.txt")
+        git(self.root, "commit", "-qm", "nested console device")
+        self.expected = git(self.root, "rev-parse", "HEAD")
+        self.assertNotEqual(self.run_checker().returncode, 0)
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "requires POSIX filenames")
+    def test_nested_trailing_space_component_is_rejected(self):
+        directory = self.root / "ingress "
+        directory.mkdir()
+        (directory / "sensor.txt").write_text("sensor")
+        git(self.root, "add", "ingress /sensor.txt")
+        git(self.root, "commit", "-qm", "trailing whitespace directory")
+        self.expected = git(self.root, "rev-parse", "HEAD")
+        self.assertNotEqual(self.run_checker().returncode, 0)
+
+    def test_nested_nonreserved_lpt10_name_remains_accepted(self):
+        directory = self.root / "ingress"
+        directory.mkdir()
+        (directory / "LPT10.txt").write_text("ordinary")
+        git(self.root, "add", "ingress/LPT10.txt")
+        git(self.root, "commit", "-qm", "safe nested port")
+        self.expected = git(self.root, "rev-parse", "HEAD")
+        self.assertEqual(self.run_checker().returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
