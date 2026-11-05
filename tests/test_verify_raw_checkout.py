@@ -380,5 +380,30 @@ class IoTWave22PortablePathBoundaries(unittest.TestCase):
         self.assertEqual(self.run_checker().returncode, 0)
 
 
+class IoTWave37GitEnvironmentAdmission(unittest.TestCase):
+    """Fail closed before any inherited Git control can change source authority."""
+    setUp = RawCheckoutPreflightTests.setUp
+    run_checker = RawCheckoutPreflightTests.run_checker
+
+    def test_inherited_git_controls_are_rejected_even_with_clean_head(self):
+        for key, value in (
+            ("GIT_CONFIG_SYSTEM", str(self.root / ".git/config")),
+            ("GIT_SSH_COMMAND", "echo unexpected"),
+            ("GIT_TRACE_SETUP", "1"),
+        ):
+            with self.subTest(name=key):
+                result = self.run_checker(extra_env={key: value})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("inherited Git control environment", result.stderr)
+
+    def test_combined_allowlisted_controls_preserve_clean_checkout(self):
+        result = self.run_checker(extra_env={
+            "GIT_NO_REPLACE_OBJECTS": "0", "GIT_TERMINAL_PROMPT": "0"
+        })
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("RAW_CHECKOUT_EXACT_HEAD_PASS", result.stdout)
+
+
+
 if __name__ == "__main__":
     unittest.main()
