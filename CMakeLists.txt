@@ -87,6 +87,20 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   endif()
   target_link_libraries(test_iot_actor_ingress PRIVATE ores_iot_frame)
   add_test(NAME iot_authenticated_actor_ingress COMMAND test_iot_actor_ingress)
+
+  # Reject a callback table aliasing queue storage before any slot scrub or
+  # checkpoint I/O. This is a native host regression, not guest/board proof.
+  add_executable(test_iot_ingress_checkpoint_io_alias_20261106
+    tests/test_iot_ingress_checkpoint_io_alias_20261106.c)
+  target_link_libraries(test_iot_ingress_checkpoint_io_alias_20261106 PRIVATE ores_iot_frame)
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_iot_ingress_checkpoint_io_alias_20261106 PRIVATE
+      -UNDEBUG -Wall -Wextra -Wpedantic -Werror)
+  endif()
+  add_test(NAME iot_ingress_checkpoint_io_alias_rejected
+    COMMAND test_iot_ingress_checkpoint_io_alias_20261106)
+  set_tests_properties(iot_ingress_checkpoint_io_alias_rejected PROPERTIES TIMEOUT 15)
+
   add_executable(iot_host_demo examples/host_demo.c)
   target_link_libraries(iot_host_demo PRIVATE ores_iot_frame)
   add_test(NAME iot_host_demo COMMAND iot_host_demo)
