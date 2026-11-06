@@ -82,6 +82,13 @@ ores_iot_ingress_status ores_iot_actor_ingress_admit(
     if(authenticated!=1) return ORES_IOT_INGRESS_UNAUTHENTICATED;
     if(byte_ranges_overlap(frame,frame_len,ingress,sizeof *ingress))
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
+    /* Do not let the caller's checkpoint callback table reside in any part
+     * of the ingress object. The unpublished tail slot is scrubbed before
+     * checkpoint I/O, and would otherwise destroy its function pointers.
+     * Check the whole table, not just its first byte or the current tail. */
+    if(byte_ranges_overlap(checkpoint_io,sizeof *checkpoint_io,
+                           ingress,sizeof *ingress))
+        return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(!valid_ingress_state(ingress) || ingress->busy)
         return ORES_IOT_INGRESS_INVALID_ARGUMENT;
     if(ingress->count >= ORES_IOT_INGRESS_QUEUE_CAPACITY)
