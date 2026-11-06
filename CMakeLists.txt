@@ -16,6 +16,29 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   endif()
   target_link_libraries(test_iot_frame PRIVATE ores_iot_frame)
   add_test(NAME iot_frame_contract COMMAND test_iot_frame)
+
+  # Already-merged Wave242–244 C host regressions must run under the same
+  # CTest invocation as the production framing tests (including sanitizer CI).
+  # Register explicit paths: a new file must never silently be left untested.
+  foreach(wave_test IN ITEMS
+      test_gpt6_wave242_frame_failclosed_20261106
+      test_gpt6_wave243_stream_empty_kinds_20261106
+      test_gpt6_wave244_encoder_write_alias_20261106)
+    add_executable(${wave_test} tests/${wave_test}.c)
+    target_link_libraries(${wave_test} PRIVATE ores_iot_frame)
+    if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(${wave_test} PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic -Werror)
+    endif()
+    add_test(NAME ${wave_test} COMMAND ${wave_test})
+    set_tests_properties(${wave_test} PROPERTIES TIMEOUT 15)
+  endforeach()
+
+  # Wave241 is a Python host verifier test, not a compiled IoT C test.
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_test(NAME iot_wave241_git_process_env_scrub
+    COMMAND "${Python3_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_git_process_env_scrub_gpt6_wave241_20261106.py")
+  set_tests_properties(iot_wave241_git_process_env_scrub PROPERTIES TIMEOUT 15)
   add_executable(test_iot_frame_bounds tests/test_iot_frame_bounds.c)
   if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(test_iot_frame_bounds PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic -Werror)
