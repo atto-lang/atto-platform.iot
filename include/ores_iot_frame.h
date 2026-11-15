@@ -36,6 +36,14 @@ typedef struct {
     size_t length;
 } ores_iot_view;
 
+/* Pure, non-consuming inspection of EXACTLY 8 header bytes. Reads no
+ * payload, performs no allocation or transport authentication. Non-aliasing
+ * outputs are reset on failure; pointers that overlap header or each other
+ * are rejected without writes. Does not establish availability of payload. */
+ores_iot_status ores_iot_probe_header(
+    const uint8_t *header, size_t header_len,
+    ores_iot_kind *kind, size_t *frame_bytes);
+
 /* Encode into caller-owned output. Input may overlap output; written must not alias
  * the payload or destination byte ranges. Aliasing is rejected before any write.
  * A non-aliasing written count is zeroed on every failure, including invalid
