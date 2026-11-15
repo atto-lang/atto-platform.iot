@@ -38,6 +38,12 @@ ores_iot_replay_status ores_iot_replay_preview(
     return status;
 }
 
+ores_iot_replay_status ores_iot_replay_classify(
+    const ores_iot_replay_window *committed, uint64_t sequence) {
+    ores_iot_replay_window candidate;
+    return ores_iot_replay_preview(committed, sequence, &candidate);
+}
+
 ores_iot_replay_status ores_iot_replay_admit(
     ores_iot_replay_window *window, uint64_t sequence) {
     uint64_t delta, bit;
