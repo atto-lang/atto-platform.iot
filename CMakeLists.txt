@@ -16,6 +16,13 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
   endif()
   target_link_libraries(test_iot_frame PRIVATE ores_iot_frame)
   add_test(NAME iot_frame_contract COMMAND test_iot_frame)
+  add_executable(test_iot_header_probe tests/test_iot_header_probe.c)
+  target_link_libraries(test_iot_header_probe PRIVATE ores_iot_frame)
+  if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(test_iot_header_probe PRIVATE -UNDEBUG -Wall -Wextra -Wpedantic -Werror)
+  endif()
+  add_test(NAME iot_nonconsuming_header_probe COMMAND test_iot_header_probe)
+  set_tests_properties(iot_nonconsuming_header_probe PROPERTIES TIMEOUT 15)
 
   # Already-merged Wave242–244 C host regressions must run under the same
   # CTest invocation as the production framing tests (including sanitizer CI).
