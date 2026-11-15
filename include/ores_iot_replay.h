@@ -34,7 +34,8 @@ ores_iot_replay_status ores_iot_replay_restore(
     ores_iot_replay_window *window, uint64_t highest, uint64_t bitmap);
 /* Prepare a candidate without changing a validated committed window.
  * On ACCEPT, *next receives the prospective state; on any other result it is
- * untouched. next must be a distinct object, not the committed window.
+ * untouched. Both windows must occupy disjoint storage, not merely
+ * have different addresses. Overlapping byte ranges are rejected.
  * Under the caller's serialization boundary: authenticate the frame, preview,
  * durably checkpoint the complete candidate, then publish/commit and apply
  * externally visible effects. This API does not perform I/O or guarantee
