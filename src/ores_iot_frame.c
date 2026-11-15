@@ -15,6 +15,32 @@ static int overlaps_region(const void *left, size_t left_len,
     return a >= b ? a - b < right_len : b - a < left_len;
 }
 
+ores_iot_status ores_iot_probe_header(
+    const uint8_t *header, size_t header_len,
+    ores_iot_kind *kind, size_t *frame_bytes) {
+    size_t payload_len;
+    if (!kind || !frame_bytes ||
+        overlaps_region(header, header_len, kind, sizeof(*kind)) ||
+        overlaps_region(header, header_len, frame_bytes, sizeof(*frame_bytes)) ||
+        overlaps_region(kind, sizeof(*kind), frame_bytes, sizeof(*frame_bytes)))
+        return ORES_IOT_INVALID_ARGUMENT;
+    *kind = (ores_iot_kind)0;
+    *frame_bytes = 0u;
+    if (!header) return ORES_IOT_INVALID_ARGUMENT;
+    if (header_len != ORES_IOT_HEADER_BYTES) return ORES_IOT_MALFORMED;
+    if (header[0] != 'O' || header[1] != 'R' ||
+        header[2] != 'E' || header[3] != 'S')
+        return ORES_IOT_MALFORMED;
+    if (header[4] != ORES_IOT_FRAME_VERSION)
+        return ORES_IOT_UNSUPPORTED_VERSION;
+    if (!valid_kind(header[5])) return ORES_IOT_UNSUPPORTED_KIND;
+    payload_len = ((size_t)header[6] << 8) | (size_t)header[7];
+    if (payload_len > ORES_IOT_MAX_PAYLOAD_BYTES) return ORES_IOT_TOO_LARGE;
+    *kind = (ores_iot_kind)header[5];
+    *frame_bytes = ORES_IOT_HEADER_BYTES + payload_len;
+    return ORES_IOT_OK;
+}
+
 ores_iot_status ores_iot_encode(ores_iot_kind kind,
     const uint8_t *payload, size_t payload_len,
     uint8_t *destination, size_t capacity, size_t *written) {
