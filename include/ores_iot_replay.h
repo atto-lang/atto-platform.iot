@@ -44,6 +44,13 @@ ores_iot_replay_status ores_iot_replay_preview(
     const ores_iot_replay_window *committed, uint64_t sequence,
     ores_iot_replay_window *next);
 
+/* Read-only preflight for bounded replay windows. Never mutates committed
+ * state or persists a checkpoint. ACCEPT is advisory only: after authenticated
+ * admission, callers MUST durably checkpoint the committed candidate before
+ * effects. Concurrent writers require caller serialization. */
+ores_iot_replay_status ores_iot_replay_classify(
+    const ores_iot_replay_window *committed, uint64_t sequence);
+
 /* Mutates only on ACCEPT. No wraparound; zero sequence is permanently invalid.
  * Allows unseen authenticated messages up to 63 below the highest sequence.
  * WARNING: this primitive does not validate the authenticity of messages. */
