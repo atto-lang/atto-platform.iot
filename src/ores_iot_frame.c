@@ -71,3 +71,12 @@ ores_iot_status ores_iot_decode(const uint8_t *frame,
     return ORES_IOT_OK;
 }
 
+
+ores_iot_status ores_iot_required_capacity(ores_iot_kind kind, size_t payload_len, size_t *required) {
+    if (required == NULL) return ORES_IOT_INVALID_ARGUMENT;
+    *required = 0;
+    if (!valid_kind((unsigned)kind)) return ORES_IOT_UNSUPPORTED_KIND;
+    if (payload_len > ORES_IOT_MAX_PAYLOAD_BYTES) return ORES_IOT_TOO_LARGE;
+    *required = ORES_IOT_HEADER_BYTES + payload_len;
+    return ORES_IOT_OK;
+}
