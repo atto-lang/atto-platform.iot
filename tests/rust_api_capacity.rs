@@ -15,14 +15,14 @@ fn size_plan_matches_real_encoder_for_entire_payload_domain() {
         for length in 0usize..=1024 {
             let payload: Vec<u8> = (0..length).map(|i| ((i * 17 + 3) % 251) as u8).collect();
             let mut need = usize::MAX;
-            assert_eq!(unsafe { ores_iot_required_capacity(kind, length, &mut need) }, OK);
+            assert_eq!(unsafe { ores_iot_required_capacity(kind, length, &mut need) }, 0);
             let mut frame = vec![0xa5u8; need];
             let mut written = usize::MAX;
             assert_eq!(unsafe { ores_iot_encode(kind, payload.as_ptr(), length,
-                frame.as_mut_ptr(), frame.len(), &mut written) }, OK);
+                frame.as_mut_ptr(), frame.len(), &mut written) }, 0);
             assert_eq!(written, need);
             let mut view = FrameView { kind: 0, payload: ptr::null(), length: 0 };
-            assert_eq!(unsafe { ores_iot_decode(frame.as_ptr(), written, &mut view) }, OK);
+            assert_eq!(unsafe { ores_iot_decode(frame.as_ptr(), written, &mut view) }, 0);
             assert_eq!(view.kind, kind);
             assert_eq!(view.length, length);
             assert_eq!(unsafe { std::slice::from_raw_parts(view.payload, length) }, payload);
