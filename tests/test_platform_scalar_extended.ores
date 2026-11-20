@@ -1,0 +1,30 @@
+// TestSuite reference-model assertions only; not native iot API execution.
+import class TestCase, TestSuite, TestOptions, TestOutcome, RunSummary from "ores.std/testing";
+import fnc expect_true, run_suite, require_success from "ores.std/testing";
+
+fnc is_new_sequence(int highest, int sequence): bool { return sequence > 0 && sequence > highest; }
+
+fnc fresh_sequence(): TestOutcome {
+  return expect_true(is_new_sequence(15,16), "fresh_sequence scalar reference failed");
+}
+fnc duplicate_denied(): TestOutcome {
+  return expect_true(!is_new_sequence(15,15), "duplicate_denied scalar reference failed");
+}
+fnc zero_denied(): TestOutcome {
+  return expect_true(!is_new_sequence(0,0), "zero_denied scalar reference failed");
+}
+fnc older_denied(): TestOutcome {
+  return expect_true(!is_new_sequence(64,1), "older_denied scalar reference failed");
+}
+pub routine main(): void {
+  val TestSuite suite = new TestSuite("platform-iot-extended", arr[
+    new TestCase("fresh_sequence", fresh_sequence, false, ""),
+    new TestCase("duplicate_denied", duplicate_denied, false, ""),
+    new TestCase("zero_denied", zero_denied, false, ""),
+    new TestCase("older_denied", older_denied, false, "")
+  ]);
+  val TestOptions options = new TestOptions("", false, true);
+  val RunSummary summary = run_suite(rt borrow suite, rt borrow options);
+  require_success(rt borrow summary);
+  return;
+}
