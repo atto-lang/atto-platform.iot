@@ -57,6 +57,9 @@ ores_iot_status ores_iot_encode(ores_iot_kind kind,
 ores_iot_status ores_iot_decode(const uint8_t *frame,
     size_t frame_len, ores_iot_view *out);
 
+/* Size-only frame preflight. Revalidate on encode; does not read payload. */
+ores_iot_status ores_iot_required_capacity(ores_iot_kind kind, size_t payload_len, size_t *required);
+
 #ifdef __cplusplus
 }
 #endif
