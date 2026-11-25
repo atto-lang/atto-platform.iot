@@ -41,3 +41,11 @@ This is a statement of intended project responsibilities. Consult source files a
 AttoLang is the canonical project name; new source, examples and documentation use `.atto` and the `atto-lang` repository organization. This README defines scope, not feature readiness.
 
 **Acceptance:** name exact source SHA/tree, runtime/toolchain, positive and negative checks and execution receipt before claiming support. Host-only tests and empty CI steps do not prove guest execution.
+
+## Migration and compatibility guardrails
+
+The canonical AttoLang repository and the archived legacy Oreslang IoT repository are distinct GitHub repositories, not an identity-preserving ownership transfer. The legacy repository is retained for history; new work belongs here. Existing supported `.ores` fixtures, C ABI identifiers and toolchain contracts are compatibility surfaces until separately migrated and tested. Use `.atto` for new language sources and follow the current [source grammar](https://github.com/atto-lang/atto-spec/blob/main/spec/01-source-and-syntax.md) and [ownership contract](https://github.com/atto-lang/atto-spec/blob/main/spec/04-ownership-and-memory.md); a target syntax rule alone is not evidence that a selected compiler supports it.
+
+Constrained-resource test contracts and IoT target capabilities belong here. Cloud account billing, tenant management, and unsupported persistent mobile-network guarantees do not. The [atto-co](https://github.com/atto-co) product organization is separately scoped; any future repository carve-out requires a new owner and security decision.
+
+For future migrations, record source and target administrators, independent security review, repository IDs, exact commits and trees, history, branch rules, permissions, open work, releases, runners, secrets/environments, packages, webhooks, Pages, submodules and downstream consumers. Verify these after an authorized migration; do not treat a temporary CI mirror as an ownership transfer. Require nonzero executed job steps on the exact tested source tree. Empty or null steps are NOT_EXECUTED; host-only checks cannot establish compiler-backed guest execution or device certification.
