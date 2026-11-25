@@ -58,6 +58,21 @@ ores_iot_status ores_iot_stream_init(ores_iot_stream *stream) {
     return ORES_IOT_OK;
 }
 
+/* Task-only size hint; not a readiness or peer-authentication signal. */
+ores_iot_status ores_iot_stream_bytes_needed(
+    const ores_iot_stream *stream, size_t *needed) {
+    if (needed == NULL) return ORES_IOT_INVALID_ARGUMENT;
+    if (overlaps_region(stream, sizeof(*stream), needed, sizeof(*needed)))
+        return ORES_IOT_INVALID_ARGUMENT;
+    *needed = 0;
+    if (!valid_stream_state(stream) || stream->busy)
+        return ORES_IOT_INVALID_ARGUMENT;
+    if (stream->failed) return ORES_IOT_CLOSED;
+    *needed = stream->expected != 0 ?
+        stream->expected - stream->used : ORES_IOT_HEADER_BYTES - stream->used;
+    return ORES_IOT_OK;
+}
+
 ores_iot_status ores_iot_stream_feed(
     ores_iot_stream *stream, const uint8_t *chunk, size_t chunk_len,
     ores_iot_frame_handler handler, void *ctx, size_t *delivered) {
