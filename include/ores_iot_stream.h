@@ -24,6 +24,14 @@ typedef ores_iot_status (*ores_iot_frame_handler)(void *ctx, const ores_iot_view
 
 ores_iot_status ores_iot_stream_init(ores_iot_stream *stream);
 
+/* Foreground-only, non-mutating hint: bytes needed to finish the incomplete
+ * header or frame; after a completed frame, reports header size again.
+ * CLOSED when finished/poisoned; INVALID_ARGUMENT for inconsistent/busy
+ * state or a count pointer overlapping parser storage (no writes on alias).
+ * Safe non-aliasing output is cleared on failure. No concurrent feed/init. */
+ores_iot_status ores_iot_stream_bytes_needed(
+    const ores_iot_stream *stream, size_t *needed);
+
 /* Consumes fragmented/multiple frames, calls handler synchronously.
  * Invalid headers/callback errors poison the stream; it returns CLOSED until init.
  * Limit each call to 4096 bytes; caller must split longer reads.

@@ -34,7 +34,8 @@ ores_iot_replay_status ores_iot_replay_restore(
     ores_iot_replay_window *window, uint64_t highest, uint64_t bitmap);
 /* Prepare a candidate without changing a validated committed window.
  * On ACCEPT, *next receives the prospective state; on any other result it is
- * untouched. next must be a distinct object, not the committed window.
+ * untouched. Both windows must occupy disjoint storage, not merely
+ * have different addresses. Overlapping byte ranges are rejected.
  * Under the caller's serialization boundary: authenticate the frame, preview,
  * durably checkpoint the complete candidate, then publish/commit and apply
  * externally visible effects. This API does not perform I/O or guarantee
@@ -43,6 +44,13 @@ ores_iot_replay_status ores_iot_replay_restore(
 ores_iot_replay_status ores_iot_replay_preview(
     const ores_iot_replay_window *committed, uint64_t sequence,
     ores_iot_replay_window *next);
+
+/* Read-only preflight for bounded replay windows. Never mutates committed
+ * state or persists a checkpoint. ACCEPT is advisory only: after authenticated
+ * admission, callers MUST durably checkpoint the committed candidate before
+ * effects. Concurrent writers require caller serialization. */
+ores_iot_replay_status ores_iot_replay_classify(
+    const ores_iot_replay_window *committed, uint64_t sequence);
 
 /* Mutates only on ACCEPT. No wraparound; zero sequence is permanently invalid.
  * Allows unseen authenticated messages up to 63 below the highest sequence.

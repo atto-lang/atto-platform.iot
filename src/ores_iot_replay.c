@@ -30,12 +30,27 @@ ores_iot_replay_status ores_iot_replay_preview(
     ores_iot_replay_window *next) {
     ores_iot_replay_window candidate;
     ores_iot_replay_status status;
-    if (committed == 0 || next == 0 || committed == next)
+    uintptr_t in, out;
+    if (committed == 0 || next == 0)
+        return ORES_IOT_REPLAY_INVALID_ARGUMENT;
+    /* A distinct pointer can still overlap the committed watermark by
+     * bytes. Reject before reading or writing either window. Flat-address
+     * host/embedded ABI; caller must still supply valid storage. */
+    in = (uintptr_t)committed;
+    out = (uintptr_t)next;
+    if ((in >= out && in - out < sizeof(*next)) ||
+        (out > in && out - in < sizeof(*committed)))
         return ORES_IOT_REPLAY_INVALID_ARGUMENT;
     candidate = *committed;
     status = ores_iot_replay_admit(&candidate, sequence);
     if (status == ORES_IOT_REPLAY_ACCEPT) *next = candidate;
     return status;
+}
+
+ores_iot_replay_status ores_iot_replay_classify(
+    const ores_iot_replay_window *committed, uint64_t sequence) {
+    ores_iot_replay_window candidate;
+    return ores_iot_replay_preview(committed, sequence, &candidate);
 }
 
 ores_iot_replay_status ores_iot_replay_admit(
